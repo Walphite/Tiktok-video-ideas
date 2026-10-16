@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}
+@font-face{font-family:"Noto Serif CJK SC";src:local("Noto Serif CJK SC Bold"),local("NotoSerifCJKsc-Bold"),url("../../assets/fonts/NotoSerifCJKsc-Bold.otf");font-weight:bold}
+</style></head>
+<body><canvas id="c"></canvas>
+<script src="core.js"></script><script src="particles.js"></script><script src="gl.js"></script><script src="layers.js"></script><script src="text.js"></script><script src="runner.js"></script>
+<script>
+// 预热字体，确保第一帧就有正确字形
+window.__fontsReady = (async () => { try { await document.fonts.load('bold 60px "Noto Serif CJK SC"'); await document.fonts.load('24px "DejaVu Sans Mono"'); } catch (e) {} return document.fonts.check('bold 60px "Noto Serif CJK SC"'); })();
+</script></body></html>

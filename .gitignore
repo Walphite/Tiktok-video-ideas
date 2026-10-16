@@ -1,0 +1,3 @@
+# fxlab 中间产物（帧段、事件日志、联系图）不进仓库；成片与预览显式提交
+fxlab/build/
+node_modules/

@@ -1,0 +1,8 @@
+{
+  "subtitles": [
+    { "t": 0.4, "end": 3.2, "text": "每一次碰撞，都是**一个音**。" },
+    { "t": 3.6, "end": 6.8, "text": "画面和声音，读同一份日志。" }
+  ],
+  "hud": [{ "t": 0, "end": 7, "label": "BOUNCE · TEST 01" }],
+  "counter": [{ "t": 0, "end": 7, "text": "fxlab v0.1" }]
+}
