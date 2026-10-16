@@ -1,0 +1,5 @@
+# 中间产物：帧缓存、基准视频与截图不进仓库（成片与预览另行显式添加）
+bench/out/*.mp4
+bench/out/*.png
+build/
+node_modules/

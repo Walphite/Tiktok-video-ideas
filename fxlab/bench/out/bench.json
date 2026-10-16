@@ -1,0 +1,16 @@
+{
+  "540p": {
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "draw_ms": "3",
+    "readback_ms": "150",
+    "png_screenshot_ms": "242",
+    "total_ms_per_frame": "200"
+  },
+  "1080p": {
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "draw_ms": "2",
+    "readback_ms": "436",
+    "png_screenshot_ms": "742",
+    "total_ms_per_frame": "573"
+  }
+}
