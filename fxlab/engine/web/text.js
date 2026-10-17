@@ -35,7 +35,7 @@ FX.Text = {
     // ---- 字幕 ----
     for (const s of (script.subtitles || [])) {
       if (t < s.t || t > s.end) continue;
-      const k = this.env(t, s.t, s.end, 0.28, 0.18); if (k <= 0) continue;
+      const k = this.env(t, s.t, s.end, s.fadeIn == null ? 0.28 : Math.max(s.fadeIn, 1e-3), 0.18); if (k <= 0) continue;
       const size = s.size || lay.subSize; c.font = `bold ${size}px ${FX.FONT_SERIF}`; c.textBaseline = 'alphabetic';
       const runs = this.parse(s.text); const lines = this.wrap(c, runs, vw * lay.subMaxW);
       const lh = size * 1.35; const x0 = vw * lay.subX; let y = vh * lay.subY - (lines.length - 1) * lh + (1 - k) * 14;
@@ -70,8 +70,12 @@ FX.Text = {
     // ---- 角落小字（如「测度论笔记 · 01」）----
     for (const s of (script.corner || [])) {
       if (t < s.t || t > s.end) continue; const k = this.env(t, s.t, s.end, 0.4, 0.3);
-      c.globalAlpha = k * 0.85; c.font = `${lay.hudSize + 2}px ${FX.FONT_SERIF}`; c.textBaseline = 'middle'; c.fillStyle = palette.text;
-      c.fillText(s.text, vw * lay.hudX, vh * lay.hudY); c.globalAlpha = 1;
+      // pos：tl 左上（默认）/ tr 右上 / bl 左下 / br 右下；font：serif（默认）/ mono
+      const pos = s.pos || 'tl', size = s.size || lay.hudSize + 2;
+      c.globalAlpha = k * (s.alpha == null ? 0.85 : s.alpha); c.font = `${size}px ${s.font === 'mono' ? FX.FONT_MONO : FX.FONT_SERIF}`; c.textBaseline = 'middle'; c.fillStyle = s.color || palette.text;
+      c.textAlign = pos.endsWith('r') ? 'right' : 'left';
+      const x = pos.endsWith('r') ? vw * (1 - lay.rightMargin) : vw * lay.hudX, y = pos.startsWith('b') ? vh * (1 - lay.hudY) : vh * lay.hudY;
+      c.fillText(s.text, x, y); c.textAlign = 'left'; c.globalAlpha = 1;
     }
   },
 };

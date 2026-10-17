@@ -81,7 +81,11 @@ def drone(notes, dur, attack, release, gain, rng):
     a = np.minimum(1, t / max(attack, 0.01)); r = np.ones(n); i0 = int(SR * dur); r[i0:] = np.exp(-(t[i0:] - dur) / max(release, 0.01))
     return out * a * r * gain / max(1, len(notes))
 
-INSTR = {'blip': lambda f, d, v, r: blip(f, d, v), 'pluck': lambda f, d, v, r: pluck(f, d, v), 'chime': lambda f, d, v, r: chime(f, d, v),
+def chordpad(f, decay, vel, rng):  # 短和弦垫：单音版本，和弦由 notes 列表叠加
+    n = int(SR * decay * 3); t = np.arange(n) / SR
+    ph = 2 * np.pi * f * t; x = np.sin(ph) + 0.4 * np.sin(2 * ph) + 0.2 * ((ph / np.pi) % 2 - 1)
+    x = lowpass(x, 1800); a = np.minimum(1, t / 0.04); return x * a * np.exp(-t / decay) * 0.4
+INSTR = {'chord': chordpad, 'blip': lambda f, d, v, r: blip(f, d, v), 'pluck': lambda f, d, v, r: pluck(f, d, v), 'chime': lambda f, d, v, r: chime(f, d, v),
          'tick': tick, 'rain': rain, 'thud': thud, 'swoosh': swoosh, 'paper': paper, 'extinguish': extinguish}
 
 def add_at(buf, x, t, pan):  # 把单声道片段叠加到立体声缓冲，pan ∈ [-1, 1]
@@ -100,12 +104,18 @@ def main():
         cfg = sounds.get(ev['type'])
         if not cfg: continue
         instr = INSTR.get(cfg.get('instr', 'blip'), INSTR['blip'])
-        midi = ev.get('midi', scale_midi(cfg.get('base', 60), cfg.get('scale', 'pentatonic'), ev.get('pitch', 0)))
         vel = float(ev.get('vel', 1.0)); decay = float(cfg.get('decay', 0.3)) * float(ev.get('decayMul', 1.0))
-        key = (cfg.get('instr'), round(midi, 2), round(decay, 3), round(vel, 1))
-        if key not in cache or cfg.get('instr') in ('tick', 'paper', 'rain'):  # 噪声类乐器每次不同
-            cache[key] = instr(midi2hz(midi), decay, vel, rng)
-        x = cache[key] * cfg.get('gain', 0.5) * (0.35 + 0.65 * vel)
+        midis = ev.get('notes') or [ev.get('midi', scale_midi(cfg.get('base', 60), cfg.get('scale', 'pentatonic'), ev.get('pitch', 0)))]
+        x = None
+        for midi in midis:
+            key = (cfg.get('instr'), round(midi, 2), round(decay, 3), round(vel, 1))
+            if key not in cache or cfg.get('instr') in ('tick', 'paper', 'rain'):  # 噪声类乐器每次不同
+                cache[key] = instr(midi2hz(midi), decay, vel, rng)
+            y = cache[key]
+            if x is None: x = y.copy()
+            else:
+                m = max(len(x), len(y)); z = np.zeros(m); z[:len(x)] += x; z[:len(y)] += y; x = z
+        x = x * cfg.get('gain', 0.5) * (0.35 + 0.65 * vel) / math.sqrt(len(midis))
         add_at(tracks[cfg.get('track', 'sfx')], x, ev['t'], (float(ev.get('x', 0.5)) - 0.5) * 1.4)
     music = d.get('music') or {}
     for layer in music.get('layers', []):

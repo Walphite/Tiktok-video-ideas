@@ -38,11 +38,16 @@ FX.Runner = {
       t: R.t, lt, dt, frame: R.frame, fps: R.fps, rng, W: 1920, H: 1080, vw: R.vw, vh: R.vh, px: R.pxScale,
       palette: R.palette, cam: R.cam, layers: R.layers, layout: R.layoutName, hud: R.hud, sceneDuration: R.duration,
       shotDuration: shot.end - shot.t,
+      // 镜头段淡入淡出系数（0..1），预设把它乘到自己的透明度上
+      fade: Math.min(shot.fadeIn ? FX.clamp(lt / shot.fadeIn, 0, 1) : 1, shot.fadeOut ? FX.clamp((shot.end - R.t) / shot.fadeOut, 0, 1) : 1),
       emit(ev) { ev.t = +(R.t).toFixed(4); ev.shot = shot.preset; if (ev.x == null) ev.x = 0.5; R.events.push(ev); },
       // 冲击：震屏幅度（设计像素）、色差（像素）、闪白（0..1）
       hit(o) { R.post.shakeAmp = Math.max(R.post.shakeAmp, o.shake || 0); R.post.caAmp = Math.max(R.post.caAmp, o.ca || 0); R.post.flash = Math.max(R.post.flash, o.flash || 0); },
       // 画粒子池（在 2D 图层 bg 之上、fg 之下）
-      points(pool, blend) { R.pointDraws.push({ pool, blend: blend || 'add' }); },
+      // space='screen' 时按屏幕坐标画（不跟随镜头），坐标需先经 toScreenWorld 转换
+      points(pool, blend, space) { R.pointDraws.push({ pool, blend: blend || 'add', cam: space === 'screen' ? { x: 960, y: 540, zoom: 1, rot: 0 } : null }); },
+      // 屏幕坐标（设计单位，左上角原点）→ 静止镜头下的世界坐标
+      sx(x) { return x - R.vw / 2 + 960; }, sy(y) { return y - R.vh / 2 + 540; },
     };
   },
   activeShots() { return this.scene.shots.filter(s => this.t >= s.t && this.t < s.end + 1e-6); },
@@ -55,7 +60,7 @@ FX.Runner = {
     this.cam.zoom = this.lay.camZoom * (1 + 0.025 * Math.sin(this.t * 0.13 + 1) * dr); this.cam.rot = 0.004 * Math.sin(this.t * 0.11) * dr;
     if (this.scene.camera) Object.assign(this.cam, this.scene.camera(this.t, this.cam));
     // 后期的脉冲量衰减
-    const P = this.post; P.shakeAmp *= 0.82; P.caAmp *= 0.72; P.flash *= 0.75;
+    this.hud.counter = null; const P = this.post; P.shakeAmp *= 0.82; P.caAmp *= 0.72; P.flash *= 0.75;
     if (P.shakeAmp < 0.05) P.shakeAmp = 0; if (P.caAmp < 0.05) P.caAmp = 0; if (P.flash < 0.003) P.flash = 0;
     // 预设
     for (const shot of this.activeShots()) {
@@ -84,7 +89,7 @@ FX.Runner = {
     for (const shot of this.activeShots()) { const st = this.shotState.get(shot); if (!st) continue; const def = FX.presets[shot.preset]; def.draw(st.state, this.makeCtx(shot, this.t - shot.t, dt, st.rng), st.params); }
     G.begin(FX.hex(this.palette.bg));
     if (L.bg.used) G.drawLayer(L.bg.canvas, 'bg', L.bg.opacity);
-    for (const d of this.pointDraws) G.drawPoints(d.pool, this.cam, { vw: this.vw, vh: this.vh }, this.pxScale, d.blend);
+    for (const d of this.pointDraws) G.drawPoints(d.pool, d.cam || this.cam, { vw: this.vw, vh: this.vh }, this.pxScale, d.blend);
     if (L.fg.used) G.drawLayer(L.fg.canvas, 'fg', L.fg.opacity);
     G.compose(this.post, this.frame);
     FX.Text.drawAll(L.ui, this.script, this.t, this.lay, this.vw, this.vh, this.palette, this.pxScale);
