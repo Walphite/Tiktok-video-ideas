@@ -30,7 +30,10 @@ chroma = librosa.feature.chroma_cqt(y=librosa.effects.harmonic(y), sr=sr, hop_le
 scores = []
 for m, prof in (('major', MAJOR), ('minor', MINOR)):
     for k in range(12): scores.append((float(np.corrcoef(chroma, np.roll(prof, k))[0, 1]), k, m))
+allsc = {(k, m): sc for sc, k, m in scores}
 scores.sort(reverse=True); r, tonic, mode = scores[0]
+def rel(k, m): return ((k + 3) % 12, 'major') if m == 'minor' else ((k + 9) % 12, 'minor')  # 相对大小调
+def cand(sc, k, m): rk, rm = rel(k, m); return {'key': f'{NAMES[k]} {m}', 'r': round(sc, 3), 'relative': f'{NAMES[rk]} {rm}', 'relative_r': round(allsc[(rk, rm)], 3)}
 scale_pcs = [(tonic + i) % 12 for i in SCALE_IV[mode]]
 triad_iv = [0, 4, 7] if mode == 'major' else [0, 3, 7]
 triad_pcs = [(tonic + i) % 12 for i in triad_iv]
@@ -61,11 +64,13 @@ feat = librosa.util.normalize(np.vstack([librosa.util.normalize(fe, axis=1), lib
 nseg = 8; bounds = librosa.segment.agglomerative(feat, nseg); btimes = librosa.frames_to_time(bounds, sr=sr, hop_length=hop).tolist() + [dur]
 segs = [{'start': round(btimes[i], 2), 'end': round(btimes[i + 1], 2), 'mean_db': round(float(np.mean(E[(tt >= btimes[i]) & (tt < btimes[i + 1])])), 2)} for i in range(nseg)]
 res = {
-    'tuning_semitones': round(tuning, 2), 'tuning_note': 'BGM 比标准音高低约 %d 音分；音效频率按此偏移，避免与 BGM 打架' % round(tuning * 100),
+    'tuning_semitones': round(tuning, 2), 'tuning_cents': round(tuning * 100, 1), 'tuning_note': 'BGM 比标准音高低约 %d 音分；音效频率按此偏移，避免与 BGM 打架' % round(tuning * 100),
     'file': 'fxlab/assets/Luv4.flac', 'duration_s': round(dur, 3),
     'tempo_bpm': round(tempo, 2), 'beat_times': [round(float(b), 3) for b in beats], 'downbeat_times': [round(float(b), 3) for b in downbeats], 'downbeat_phase': phase,
     'key': {'tonic': NAMES[tonic], 'tonic_pc': int(tonic), 'mode': mode, 'confidence_r': round(r, 3), 'scale_pitch_classes': scale_pcs, 'scale_names': [NAMES[p] for p in scale_pcs],
-            'tonic_triad_pcs': triad_pcs, 'tonic_triad': NAMES[tonic] + ('' if mode == 'major' else 'm'), 'main_chord': NAMES[tonic] + ('' if mode == 'major' else 'm'), 'best_triad_by_chroma': main_chord, 'runner_up_keys': [f'{NAMES[k]} {m} ({s:.2f})' for s, k, m in scores[1:4]]},
+            'tonic_triad_pcs': triad_pcs, 'tonic_triad': NAMES[tonic] + ('' if mode == 'major' else 'm'), 'main_chord': NAMES[tonic] + ('' if mode == 'major' else 'm'), 'best_triad_by_chroma': main_chord, 'runner_up_keys': [f'{NAMES[k]} {m} ({s:.2f})' for s, k, m in scores[1:4]],
+            'candidates': [cand(sc, k, m) for sc, k, m in scores[:6]], 'margin_over_runner_up': round(scores[0][0] - scores[1][0], 3),
+            'note': '相对大小调含相同的七个音；主音由低频根音与终止感判断（贝斯根音 F 最强）'},
     'energy_db': {'step_s': step, 'values': [round(float(v), 2) for v in E]},
     'segments': segs, 'uplift_candidates': cands,
 }
