@@ -35,11 +35,27 @@ function chatBubble(c, x, y, w, h, fill, alpha, text, textAlpha, fontPx, textCol
 const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha = alpha; c.fillStyle = color; c.font = `bold ${size}px ${FX.FONT_SERIF}`; c.textAlign = align || 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(0,0,0,0.85)'; c.shadowBlur = 10; c.fillText(text, x, y); c.shadowBlur = 0; c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.globalAlpha = 1; };
 
 // ============================================================
-// 钩子：风暴末 1.3 秒加速涌向镜头（蓄力），切点处由闪白接住
+// 钩子：前 2 秒保持原密度与速度；之后逐步减速、减密、略暗，让中央关键词在较稀疏的背景上读清
+// 每个气泡有自己的退场时刻（退场前 0.5 秒淡出），避免突然消失
 // ============================================================
-FX.registerPreset('storm_charge', Object.assign({}, FX.presets.chat_bubble_storm, {
-  step(s, ctx, p) { p.speed = 1 + 1.8 * FX.prog(ctx.lt, ctx.shotDuration - 1.3, ctx.shotDuration, 'inQuad'); FX.presets.chat_bubble_storm.step.call(this, s, ctx, p); },
-}));
+{
+  const base = FX.presets.chat_bubble_storm;
+  FX.registerPreset('storm_settle', Object.assign({}, base, {
+    params: Object.assign({}, base.params, { calmFrom: 2.0, calmTo: 4.4, speedEnd: 0.25, keepEnd: 0.3, dimEnd: 0.7 }),
+    step(s, ctx, p) { p.speed = FX.lerp(1, p.speedEnd, FX.prog(ctx.lt, p.calmFrom, p.calmTo, 'inOutSine')); base.step.call(this, s, ctx, p); },
+    draw(s, ctx, p) {
+      const t = ctx.lt, items = s.items, L = 6, groups = Array.from({ length: L + 1 }, () => []);
+      items.forEach((it, i) => {
+        const r = (i * 0.61803398875) % 1; let a = 1;
+        if (r < 1 - p.keepEnd) { const td = p.calmFrom + 0.2 + r / (1 - p.keepEnd) * (p.calmTo - p.calmFrom - 0.2); a = 1 - FX.prog(t, td, td + 0.5); }
+        const lv = Math.round(a * L); if (lv > 0) groups[lv].push(it);
+      });
+      const dim = FX.lerp(1, p.dimEnd, FX.prog(t, p.calmFrom, p.calmTo));
+      for (let lv = 1; lv <= L; lv++) { if (!groups[lv].length) continue; s.items = groups[lv]; const c2 = Object.create(ctx); c2.fade = ctx.fade * (lv / L) * dim; base.draw.call(this, s, c2, p); }
+      s.items = items;
+    },
+  }));
+}
 
 // ============================================================
 // A1 dirichlet_chat：灰点始终是聊天气泡（缩小有轮廓，放大有字），图例标注
@@ -155,11 +171,12 @@ FX.registerPreset('storm_charge', Object.assign({}, FX.presets.chat_bubble_storm
     step(s, ctx, p) { base.step.call(this, s, big(ctx), p); },
     draw(s, ctx, p) { base.draw.call(this, s, big(ctx), p); },
   }));
-  wrapP(vb, 'voice_bubble_right', { slabH: 48, appearAt: 0.2, expandAt: 0.9, expandDur: 0.9 });
-  wrapP(st, 'slab_tower_right', { rotEnd: 8.0, slabH: 48, firstAt: 0.4, gap: 0.4, dropDur: 0.3 });  // 塔每层 48 高：给上部 headline 让出位置
+  const TW = { slabY: 720, slabW: 935, slabH: 41, depth: 136 };  // 塔整体缩到 85% 并下移 20：塔顶（含点亮上浮）离 headline 底边 ≥ 12% 画面高
+  wrapP(vb, 'voice_bubble_right', Object.assign({ appearAt: 0.2, expandAt: 0.9, expandDur: 0.9, bubbleW: 272, bubbleH: 65 }, TW));
+  wrapP(st, 'slab_tower_right', Object.assign({ rotEnd: 8.0, firstAt: 0.4, gap: 0.4, dropDur: 0.3 }, TW));
   FX.registerPreset('tower_with_gray_line', {
     描述: '灰色问候层缩成左侧细线（高度 0）并标注；蓝塔上方标注 60″ × 满格',
-    params: { x0: 110, x1: 600, y: 700, drawDur: 1.4, towerLabelY: 252, towerTop: 7 },
+    params: { x0: 110, x1: 600, y: 720, drawDur: 1.4, towerLabelX: 1830, towerLabelY: 540 },
     init() { return {}; }, step() {},
     draw(s, ctx, p) {
       const t = ctx.lt, F = ctx.fade, c = ctx.layers.bg.world(ctx.cam, ctx.px), k = FX.prog(t, 0.2, 0.2 + p.drawDur, 'outCubic');
@@ -168,7 +185,7 @@ FX.registerPreset('storm_charge', Object.assign({}, FX.presets.chat_bubble_storm
         for (let x = p.x0; x < FX.lerp(p.x0, p.x1, k); x += 22) chatBubble(c, x + 8, p.y - 2, 20, 3, '#8C929E', 0.9 * F, null, 0, 0, null); // 细线里一个个压扁的气泡
       }
       const a = FX.prog(t, 1.0, 1.6); if (a > 0) labelText(c, LAB('line_zero'), p.x0, p.y - 56, 36, '#FFFFFF', a * F * 0.95, 'left');
-      const b = FX.prog(t, 5.6, 6.3); if (b > 0) labelText(c, LAB('tower_full'), 1190, p.towerLabelY, 42, '#8FB0FF', b * F * 0.95);
+      const b = FX.prog(t, 5.6, 6.3); if (b > 0) { const [l1, l2] = LAB('tower_full').split(' '); labelText(c, l1, p.towerLabelX, p.towerLabelY - 26, 40, '#8FB0FF', b * F * 0.95, 'right'); labelText(c, l2 + (LAB('tower_full').split(' ').slice(2).join(' ') ? ' ' + LAB('tower_full').split(' ').slice(2).join(' ') : ''), p.towerLabelX, p.towerLabelY + 24, 40, '#8FB0FF', b * F * 0.95, 'right'); }  // 「60″」/「× 满格」两行放在塔的右侧
     },
   });
 }
@@ -200,7 +217,7 @@ const DUST_T = u(21), LIGHT_T = [12, 9, 7, 5, 3.5, 2.5, 1.5, 0.5].map(b => DUST_
       orbitBase: 0.2, orbitAmp: 0.14, orbitPeriod: 24, orbitFrom: u(15) + 3.3, // 斜侧视角中心约 11°，±8° 缓慢环绕
       litDur: 0.45, lift: 14, dustPer: 1700, dissolveGap: 0.2, dissolveDur: 0.45,
       gatherAt: DUST_T + 2.0, gatherDelay: 0.4, gatherDur: [1.2, 1.6], bow: 70,
-      goldAt: DUST_T + 4.0, goldDur: 1.5, gold: [1.0, 0.9, 0.66], fringe: 0.1,
+      goldAt: DUST_T + 4.0, goldDur: 1.5, gold: [1.0, 0.92, 0.7], fringe: 0.16, textBoost: 1.6, textExposure: 1.2,
       fontSize: 300, textY: 470, subY: 660, subAt: DUST_T + 4.2, sweepT0: DUST_T + 4.4, sweepDur: 1.8, sweepHalf: 230,
       lumFrom: u(18), lumTo: u(19), exposure: 0.82, bloom: 0.9,
     }),
@@ -220,7 +237,7 @@ const DUST_T = u(21), LIGHT_T = [12, 9, 7, 5, 3.5, 2.5, 1.5, 0.5].map(b => DUST_
     step(s, ctx, p) {
       base.step.call(this, s, noFlash(ctx), p); const T = ctx.t, d = s.dust, L = p.layers;
       // 整体亮度上限：50 秒起压低曝光与泛光（只在本段生效，前面不动）
-      const lk = FX.prog(T, p.lumFrom, p.lumTo), P = FX.Runner.post; if (lk > 0) { P.exposure = FX.lerp(1.3, p.exposure, lk); P.bloomStrength = FX.lerp(1.3, p.bloom, lk); }
+      const lk = FX.prog(T, p.lumFrom, p.lumTo), gk = FX.prog(T, p.goldAt, p.goldAt + p.goldDur, 'inOutSine'), P = FX.Runner.post; if (lk > 0) { P.exposure = FX.lerp(FX.lerp(1.3, p.exposure, lk), p.textExposure, gk); P.bloomStrength = FX.lerp(FX.lerp(1.3, p.bloom, lk), 1.15, gk); }  // 点亮 / 化尘期亮度压在 60% 内；字成型转白金后回到与 headline 同级
       // 事件标记：每层点亮一个 layer_light（阶段 B 让音阶逐级上行）；56.0 化尘开始 dust_start；每层化尘一个 layer_dust
       for (let i = 0; i < L; i++) {
         if (!s.lit[i] && T >= LIGHT_T[i]) { s.lit[i] = 1; ctx.emit({ type: 'layer_light', marker: true, pitch: i, vel: 0.5 + 0.5 * i / (L - 1), x: 0.5 }); }
@@ -266,7 +283,7 @@ const DUST_T = u(21), LIGHT_T = [12, 9, 7, 5, 3.5, 2.5, 1.5, 0.5].map(b => DUST_
       const lab = 1 - FX.prog(T, DUST_T, DUST_T + 0.6);
       if (lab > 0 && any) {
         c.globalAlpha = F * 0.85 * lab; c.fillStyle = '#FFFFFF'; c.font = `30px ${FX.FONT_MONO}`; c.textAlign = 'center'; const lb = Pj(0, -40, hd); c.fillText(p.label, lb[0], lb[1]); c.textAlign = 'left';
-        const hk = FX.prog(lt, p.firstAt + 2 * p.gap, p.firstAt + 3 * p.gap); if (hk > 0) { const side = th < Math.PI / 2 ? -1 : 1, a = Pj(side * (hw + 60), 0, 0), b = Pj(side * (hw + 60), Math.min(L, s.landed + 1) * p.slabH, 0); c.globalAlpha = F * hk * 0.85 * lab; c.strokeStyle = '#FFFFFF'; c.lineWidth = 1; c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.stroke(); c.font = `33px ${FX.FONT_SERIF}`; c.textAlign = side < 0 ? 'right' : 'left'; c.shadowColor = 'rgba(0,0,0,0.8)'; c.shadowBlur = 8; c.fillText('高度 = 分量', b[0] + side * 14, (a[1] + b[1]) / 2 + 8); c.shadowBlur = 0; c.textAlign = 'left'; }
+        const hk = FX.prog(lt, p.firstAt + 7 * p.gap, p.firstAt + 8 * p.gap);  // 塔全部落定后才出现「高度 = 分量」，避免与左侧灰线标注相邻 if (hk > 0) { const side = th < Math.PI / 2 ? -1 : 1, a = Pj(side * (hw + 60), 0, 0), b = Pj(side * (hw + 60), Math.min(L, s.landed + 1) * p.slabH, 0); c.globalAlpha = F * hk * 0.85 * lab; c.strokeStyle = '#FFFFFF'; c.lineWidth = 1; c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.stroke(); c.font = `33px ${FX.FONT_SERIF}`; c.textAlign = side < 0 ? 'right' : 'left'; c.shadowColor = 'rgba(0,0,0,0.8)'; c.shadowBlur = 8; c.fillText('高度 = 分量', b[0] + side * 14, (a[1] + b[1]) / 2 + 8); c.shadowBlur = 0; c.textAlign = 'left'; }
       }
       c.globalAlpha = 1;
       // ---- 粒子：萤火上飘 → 汇聚成字 ----
@@ -277,7 +294,7 @@ const DUST_T = u(21), LIGHT_T = [12, 9, 7, 5, 3.5, 2.5, 1.5, 0.5].map(b => DUST_
         const [x, y, u] = this.pos(d, i, T, ts, p); let col = this.layerColor(li, p, 1);
         if (g > 0) { const w = FX.mix(p.gold, [1, 1, 1], d.gv[i] * 0.35); col = FX.mix(col, w, g); }
         if (kk > 0 && kk < 1) { const dx = (x - xb) / p.sweepHalf, wgt = Math.exp(-dx * dx) * 0.95; if (wgt > 0.02) col = FX.mix(col, FX.hsv(FX.clamp(0.5 + (x - xb) / (2 * p.sweepHalf), 0, 1) * 0.76, 0.9, 1), wgt); }
-        const a = d.a0[i] * vis * (0.85 + 0.15 * Math.sin(T * 3 + d.ph[i])), size = d.size[i] * (1 - 0.35 * u);
+        const a = Math.min(1, d.a0[i] * vis * (0.85 + 0.15 * Math.sin(T * 3 + d.ph[i])) * (1 + p.textBoost * g)), size = d.size[i] * (1 - 0.35 * u) * (1 + 0.25 * g);
         pool.spawn({ x, y, size, color: col, alpha: a, shape: 1 });
         if (i % 4 === 0) pool.spawn({ x, y, size: size * 3.2, color: this.layerColor(li, p, 1), alpha: p.fringe * vis * (u > 0.99 ? 1 : 0.7), shape: 0 }); // 柔光 / 极淡彩边
         if (u > 0 && u < 1) for (const lag of [2, 4, 6]) { const q = this.pos(d, i, T - lag * dtf, ts, p); pool.spawn({ x: q[0], y: q[1], size: size * (1 - lag * 0.1), color: col, alpha: a * 0.45 * (1 - lag / 8), shape: 1 }); }
@@ -312,6 +329,18 @@ FX.registerPreset('cut_markers', {
   step(s, ctx, p) { p.cuts.forEach((c, i) => { if (!s.fired.has(i) && ctx.t >= c.t) { s.fired.add(i); ctx.emit({ type: 'cut_marker', kind: c.kind, marker: true, x: 0.5 }); } }); },
 });
 
+// 15U：真正的渐黑再渐显。0.25 秒降到全黑、保持 0.15 秒、0.4 秒渐显（直接作用在合成曝光上，连背景一起黑；字幕层不受影响）
+FX.registerPreset('dip_black', {
+  描述: '曝光与噪点同步降到 0 再升回',
+  params: { t0: 0, down: 0.25, hold: 0.15, up: 0.4 },
+  init() { return { on: false }; }, draw() {},
+  step(s, ctx, p) {
+    const T = ctx.t, P = FX.Runner.post, base = FX.Runner.defaultPost();
+    let k = 1; if (T >= p.t0 - p.down && T < p.t0) k = 0.5 + 0.5 * Math.cos(Math.PI * (T - (p.t0 - p.down)) / p.down); else if (T >= p.t0 && T < p.t0 + p.hold) k = 0; else if (T >= p.t0 + p.hold && T < p.t0 + p.hold + p.up) { const x = (T - p.t0 - p.hold) / p.up; k = x * x * (3 - 2 * x); }
+    if (k < 1) { P.exposure = base.exposure * k; P.noise = base.noise * k; s.on = true; } else if (s.on) { P.exposure = base.exposure; P.noise = base.noise; s.on = false; }
+  },
+});
+
 const FLASH_T = [u(2), u(8), u(13)], QUIET = [[u(4), u(8)], [u(17), u(19)]], G = 0.06;  // G：闪白峰值后 0.06 秒新场景才显影
 const ramp = (t, a, b, r) => Math.min(FX.prog(t, a, a + r), 1 - FX.prog(t, b - r, b));
 FX.scene({
@@ -328,14 +357,15 @@ FX.scene({
     return out;
   },
   shots: [
-    { preset: 'storm_charge',           t: 0,            end: u(2),  },
+    { preset: 'storm_settle',           t: 0,            end: u(2) },
     { preset: 'dirichlet_chat',         t: u(2) + G,     end: u(8),  fadeIn: 0.15, params: { zooms: [{ t0: 0.3, t1: 3.2, factor: 9 }, { t0: 3.4, t1: 6.2, factor: 9 }], numberStart: 6.4, numberRate: 5.5, grayRatio: 0.14, density: 260 } },
     { preset: 'riemann_amber',          t: u(8) + G,     end: u(10), fadeIn: 0.15 },
     { preset: 'banknote_chat_sort',     t: u(10),        end: u(13), fadeIn: 0.1 },
-    { preset: 'bubbles_calm',           t: u(13) + G,    end: u(15), fadeIn: 0.15, fadeOut: 0.25 },   // 15U：0.25 秒渐黑 + 0.25 秒渐显
-    { preset: 'voice_bubble_right',     t: u(15),        end: u(15) + 1.9, fadeIn: 0.25 },
+    { preset: 'bubbles_calm',           t: u(13) + G,    end: u(15), fadeIn: 0.15 },
+    { preset: 'voice_bubble_right',     t: u(15),        end: u(15) + 1.9 },
     { preset: 'slab_tower_finale',      t: u(15) + 1.9,  end: TOTAL },
-    { preset: 'tower_with_gray_line',   t: u(15),        end: DUST_T + 2.6, fadeIn: 0.25, fadeOut: 0.6 },
+    { preset: 'tower_with_gray_line',   t: u(15),        end: DUST_T + 2.6, fadeOut: 0.6 },
+    { preset: 'dip_black',              t: u(15) - 0.3,  end: u(15) + 0.9, params: { t0: u(15) } },
     { preset: 'flash_cut',              t: 0,            end: TOTAL, params: { times: FLASH_T } },
     { preset: 'cut_markers',            t: 0,            end: TOTAL, params: { cuts: [{ t: u(2), kind: 'flash' }, { t: u(8), kind: 'flash' }, { t: u(10), kind: 'hard' }, { t: u(13), kind: 'flash' }, { t: u(15), kind: 'dip_to_black' }, { t: DUST_T, kind: 'dust' }] } },
     { preset: 'caption_pad',            t: 0,            end: u(2), fadeOut: 0.3, params: { from: 0.42, alpha: 0.9 } },   // 钩子段字幕垫底更深
