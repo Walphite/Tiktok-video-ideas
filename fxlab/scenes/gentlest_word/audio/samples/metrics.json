@@ -1,0 +1,220 @@
+{
+ "segments": [
+  {
+   "segment": "0-4s",
+   "sfx_minus_bgm_db": -17.7,
+   "triggers": 14,
+   "triggers_per_s_mean": 3.5,
+   "triggers_per_s_max_bin": 4,
+   "sfx_peak_dbfs": -12.2,
+   "mix_rms_db": -16.8
+  },
+  {
+   "segment": "4-20s",
+   "sfx_minus_bgm_db": -12.8,
+   "triggers": 109,
+   "triggers_per_s_mean": 6.81,
+   "triggers_per_s_max_bin": 17,
+   "sfx_peak_dbfs": -12.9,
+   "mix_rms_db": -17.5
+  },
+  {
+   "segment": "20-35s",
+   "sfx_minus_bgm_db": -8.4,
+   "triggers": 89,
+   "triggers_per_s_mean": 5.93,
+   "triggers_per_s_max_bin": 31,
+   "sfx_peak_dbfs": -9.8,
+   "mix_rms_db": -17.2
+  },
+  {
+   "segment": "35-40s",
+   "sfx_minus_bgm_db": -14.3,
+   "triggers": 4,
+   "triggers_per_s_mean": 0.8,
+   "triggers_per_s_max_bin": 2,
+   "sfx_peak_dbfs": -18.1,
+   "mix_rms_db": -17.4
+  },
+  {
+   "segment": "40-56s",
+   "sfx_minus_bgm_db": -7.3,
+   "triggers": 19,
+   "triggers_per_s_mean": 1.19,
+   "triggers_per_s_max_bin": 3,
+   "sfx_peak_dbfs": -9.9,
+   "mix_rms_db": -18.3
+  },
+  {
+   "segment": "56-64s",
+   "sfx_minus_bgm_db": -4.5,
+   "triggers": 10,
+   "triggers_per_s_mean": 1.25,
+   "triggers_per_s_max_bin": 5,
+   "sfx_peak_dbfs": -5.6,
+   "mix_rms_db": -13.8
+  }
+ ],
+ "integrated_lufs": -16.95,
+ "mix_peak_dbfs": -1.0,
+ "req1_32_37": {
+  "sfx_minus_bgm_db": -13.0,
+  "sfx_peak_dbfs": -18.0,
+  "triggers_per_s_bins": 2,
+  "pass": true
+ },
+ "req2_stamp_22_25_vs_climax_db": -6.0,
+ "req3": {
+  "climax_56_60_minus_50_55_db": 6.9,
+  "rms_peak_time_s": 58.0,
+  "peak_in_56_60": true,
+  "margin_over_best_outside_db": 1.0
+ },
+ "req4_light": {
+  "designed_peak_dbfs_per_layer(pre-mix)": [
+   -18.4,
+   -16.9,
+   -15.4,
+   -13.9,
+   -12.4,
+   -10.9,
+   -9.4,
+   -7.9
+  ],
+  "onsets_detected_50_56": [
+   50.01,
+   50.38,
+   50.88,
+   51.38,
+   51.51,
+   52.67,
+   53.51,
+   54.17,
+   54.67,
+   55.17,
+   55.5
+  ],
+  "every_second_has_onset": true,
+  "trigger_times": [
+   50,
+   50.375,
+   50.875,
+   51.375,
+   51.5,
+   52.667,
+   53.5,
+   54.167,
+   54.667,
+   55.167,
+   55.5
+  ],
+  "light_times": [
+   50,
+   51.5,
+   52.667,
+   53.5,
+   54.167,
+   54.667,
+   55.167,
+   55.5
+  ]
+ },
+ "req5": {
+  "triggers_0_3_bins": [
+   4,
+   3,
+   4
+  ],
+  "rms_5_9_db": -18.0,
+  "rms_0_4_db": -16.8,
+  "rms_9_20_db": -17.3,
+  "dip_applied_db": -2.5
+ },
+ "pitch_check": {
+  "total_pitched_notes": 147,
+  "first_pick_pass_rate": 0.6463,
+  "final_pass_rate": 1.0,
+  "failed_count": 0,
+  "by_type": {
+   "ping": {
+    "n": 15,
+    "passed": 15
+   },
+   "twinkle": {
+    "n": 50,
+    "passed": 50
+   },
+   "rise": {
+    "n": 34,
+    "passed": 34
+   },
+   "collapse": {
+    "n": 1,
+    "passed": 1
+   },
+   "stamp": {
+    "n": 1,
+    "passed": 1
+   },
+   "extinguish": {
+    "n": 6,
+    "passed": 6
+   },
+   "settle": {
+    "n": 1,
+    "passed": 1
+   },
+   "appear": {
+    "n": 1,
+    "passed": 1
+   },
+   "layer": {
+    "n": 7,
+    "passed": 7
+   },
+   "layer_light": {
+    "n": 8,
+    "passed": 8
+   },
+   "chord": {
+    "n": 6,
+    "passed": 6
+   },
+   "layer_dust": {
+    "n": 8,
+    "passed": 8
+   },
+   "arrive": {
+    "n": 5,
+    "passed": 5
+   },
+   "glide_start": {
+    "n": 1,
+    "passed": 1
+   },
+   "glide_end": {
+    "n": 1,
+    "passed": 1
+   },
+   "swell": {
+    "n": 2,
+    "passed": 2
+   }
+  },
+  "rule": "音级在触发时刻（-0.1~+0.4s）BGM 色度中的能量排名须 ≤ 5"
+ },
+ "pitch_failed": [],
+ "section_rel_db": [
+  -5.0,
+  -5.0,
+  -5.5,
+  -6.5,
+  -5.0,
+  -6.0,
+  -6.0,
+  -7.0,
+  0.0,
+  -7.38
+ ],
+ "sfx_gate_32_38_factor": 0.579
+}
