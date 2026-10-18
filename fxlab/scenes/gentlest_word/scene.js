@@ -96,7 +96,7 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
       const gy = p.groundY, mv = (d, a, b) => FX.prog(t, p.bubbleSortAt + d, p.bubbleSortAt + d + p.bubbleMove, 'inOutQuad');
       c.globalAlpha = 0.35 * appear * FX.prog(t, p.bubbleSortAt + 0.6, p.bubbleSortAt + 1.4); c.strokeStyle = '#FFFFFF'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(200, gy + 3); c.lineTo(1760, gy + 3); c.stroke();
       for (const g of s.greet) { // 问候气泡：摊成贴地细线（高度 ≈ 0）
-        const k = mv(g.delay), w = FX.lerp(96, 30, k), h = FX.lerp(60, 3, k), x = FX.lerp(g.x0, g.x1, k), y = FX.lerp(g.y0 + Math.sin(t * 2 + g.ph) * 3, gy - 1.5, k) - Math.sin(k * Math.PI) * 40;
+        const k = mv(g.delay), w = FX.lerp(96, 34, k), h = FX.lerp(60, 16, k), x = FX.lerp(g.x0, g.x1, k), y = FX.lerp(g.y0 + Math.sin(t * 2 + g.ph) * 3, gy - 8, k) - Math.sin(k * Math.PI) * 40;
         chatBubble(c, x, y, w, h, '#8C929E', appear * 0.95, g.text, 1 - FX.clamp(k * 2.2, 0, 1), 30, '#161922');
       }
       for (const v of s.voice) { // 60″ 语音气泡：立起一摞
@@ -104,7 +104,7 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
         chatBubble(c, x, y, w, h, p.denominations[2].color, appear, LAB('voice_tag'), 1, 28, '#FFFFFF');
       }
       const lab = FX.prog(t, p.bubbleSortAt + 1.5, p.bubbleSortAt + 2.0) * appear;
-      if (lab > 0) { labelText(c, LAB('sort_greet'), (p.greetX[0] + p.greetX[1]) / 2, gy + 54, 36, '#FFFFFF', lab * 0.95); labelText(c, LAB('sort_voice'), p.voiceX, gy + 54, 36, '#FFFFFF', lab * 0.95); }
+      if (lab > 0) { labelText(c, LAB('sort_greet'), (p.greetX[0] + p.greetX[1]) / 2, gy + 54, 36, '#FFFFFF', lab * 0.95); labelText(c, LAB('sort_count'), (p.greetX[0] + p.greetX[1]) / 2, gy - 48, 40, '#C9CED8', lab * 0.95); labelText(c, LAB('sort_voice'), p.voiceX, gy + 54, 36, '#FFFFFF', lab * 0.95); }
     },
   }));
 }
@@ -145,121 +145,111 @@ FX.registerPreset('caption_pad', {
   描述: '底部淡深色渐变，托住字幕',
   params: { from: 0.62, alpha: 0.62 },
   init() { return {}; }, step() {},
-  draw(s, ctx, p) { const c = ctx.layers.fg.screen(ctx.px), g = c.createLinearGradient(0, ctx.vh * p.from, 0, ctx.vh); g.addColorStop(0, 'rgba(4,6,12,0)'); g.addColorStop(1, `rgba(4,6,12,${p.alpha})`); c.globalAlpha = 1; c.fillStyle = g; c.fillRect(0, ctx.vh * p.from, ctx.vw, ctx.vh * (1 - p.from)); },
+  draw(s, ctx, p) { const c = ctx.layers.fg.screen(ctx.px), g = c.createLinearGradient(0, ctx.vh * p.from, 0, ctx.vh); g.addColorStop(0, 'rgba(4,6,12,0)'); g.addColorStop(1, `rgba(4,6,12,${p.alpha})`); c.globalAlpha = ctx.fade; c.fillStyle = g; c.fillRect(0, ctx.vh * p.from, ctx.vw, ctx.vh * (1 - p.from)); },
 });
 
 // ============================================================
-// A5' slab_tower_burst：52–56 塔剥落成粒子并变亮；56.0 亮环冲击波扫过，塔碎成粒子（按层高着色）；
-// 57.5–58.5 粒子带着彩色收拢成「几乎处处」，再用 1.5 秒过渡到白金色；光带扫过时字面闪一次彩虹
-// 时间标记：爆发点 56.0（BURST_T），上升段 53.0–56.0（RISER），写入事件日志 riser_start / riser / riser_end / burst_marker
+// 收尾段 slab_tower_finale（44–64 秒）
+//   50–56 塔逐层点亮为光谱色（低暖红橙 → 高冷青紫），每层上浮并泛光，节奏逐层加快（每层一个事件标记 layer_light）
+//   56.0 化尘开始：塔从顶层起逐层碎成发光粒子，保留层色，萤火般缓慢上飘（不爆炸、不白闪、不加环）
+//   58–60 粒子带短拖尾沿弧线汇聚成「几乎处处」；60.0 起约 1.5 秒过渡成白金色，留极淡彩边；光带扫过时整行字闪一次彩虹渐变
+//   镜头不推近：塔只做 ±8° 的极缓横向环绕；整体亮度压在 60% 以内（见 lumCap）
 // ============================================================
-const BURST_T = 56.0, RISER_T0 = 53.0, RISER_T1 = 56.0;
+const DUST_T = 56.0, LIGHT_T = [300, 309, 316, 321, 325, 328, 331, 333].map(v => v / 6); // 50.0 … 55.5，落在 1/6 秒网格上（24fps 与 30fps 都精确对齐）
 {
-  const base = FX.presets.slab_tower_right, bu = FX.presets.burst_rainbow, pt = FX.presets.particle_text;
-  const LAGS = [2, 4, 6, 8, 10], M = 11;
-  FX.registerPreset('slab_tower_burst', Object.assign({}, base, {
-    描述: '蓝塔剥落 → 亮环冲击波碎成按层高着色的粒子 → 带拖尾螺旋飞散 → 彩色收拢成大字 → 白金色',
+  const base = FX.presets.slab_tower_right, pt = FX.presets.particle_text, big = bigFont(1.5, 40);
+  const specColor = (i, n, v) => FX.hsv(FX.lerp(0.02, 0.76, i / (n - 1)), 0.78, v);
+  FX.registerPreset('slab_tower_finale', Object.assign({}, base, {
+    描述: '塔逐层点亮 → 逐层化尘上飘 → 弧线汇聚成大字 → 白金色',
     params: Object.assign({}, base.params, {
-      flakeFrom: 52, flakeRate0: 4, flakeRate1: 80, flakeMax: 800, brightMax: 1.7,
-      count: 12000, ringDur: 1.8, ringMax: 2000, ringAlpha: 0.5, ringWidth: 120, caBurst: 7,
-      hueLo: 0.0, hueHi: 0.78, speed: [350, 1300], drag: 2.4, spin: [0.9, 2.4],
-      gatherAt: 57.5, gatherDur: 1.0, goldAt: 58.5, goldDur: 1.5, gold: [1.0, 0.9, 0.66],
-      fontSize: 300, textY: 470, subY: 660, subAt: 58.7, sweepT0: 59.0, sweepDur: 1.8, sweepHalf: 150,
-      arpRateStart: 3, arpRateEnd: 22, arpDuration: 3.0,
+      orbitBase: 0.2, orbitAmp: 0.14, orbitPeriod: 14, orbitFrom: 48.3, // 斜侧视角中心约 11°，±8° 缓慢环绕
+      litDur: 0.45, lift: 14, dustPer: 1700, dissolveGap: 0.2, dissolveDur: 0.45,
+      gatherAt: 58.0, gatherDelay: 0.4, gatherDur: [1.2, 1.6], bow: 70,
+      goldAt: 60.0, goldDur: 1.5, gold: [1.0, 0.9, 0.66], fringe: 0.1,
+      fontSize: 300, textY: 470, subY: 660, subAt: 60.2, sweepT0: 60.4, sweepDur: 1.8, sweepHalf: 230,
+      lumFrom: 46, lumTo: 50, exposure: 0.82, bloom: 0.9,
     }),
-    sounds: Object.assign({}, base.sounds, { burst: bu.sounds.burst, swoosh: bu.sounds.swoosh, arp: bu.sounds.arp, arrive: pt.sounds.arrive }),
+    sounds: Object.assign({}, base.sounds, { arrive: pt.sounds.arrive }),
     init(ctx, p) {
-      const s = base.init.call(this, ctx, p); s.flk = new FX.ParticlePool(p.flakeMax); s.fa = 0; s.riserIdx = 0; s.riserOn = false; s.burst = false; s.shat = null; s.cap = null; s.arrived = false; s.arpAcc = 0; s.pool2 = new FX.ParticlePool(p.count * (1 + LAGS.length) + 100);
-      s.cy0 = p.slabY - p.layers * p.slabH / 2; return s;
+      const s = base.init.call(this, ctx, p), rng = ctx.rng, L = p.layers, n = L * p.dustPer, cv = document.createElement('canvas'); cv.width = 1920; cv.height = 1080;
+      const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.font = `bold ${p.fontSize}px ${FX.FONT_SERIF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(LAB('big_text'), 960, p.textY);
+      const img = g.getImageData(0, 0, 1920, 1080).data, cand = []; for (let y = 0; y < 1080; y += 2) for (let x = 0; x < 1920; x += 2) if (img[(y * 1920 + x) * 4 + 3] > 128) cand.push(x, y); const nC = cand.length / 2;
+      const F32 = () => new Float32Array(n), d = { n, u: F32(), v: F32(), w: F32(), x0: F32(), y0: F32(), vy: F32(), ph: F32(), dly: F32(), size: F32(), a0: F32(), tx: F32(), ty: F32(), gd: F32(), gdur: F32(), bow: F32(), gv: F32(), on: new Uint8Array(n) };
+      for (let i = 0; i < n; i++) { d.u[i] = rng.range(-1, 1); d.v[i] = rng(); d.w[i] = rng.range(-1, 1); d.vy[i] = rng.range(18, 55); d.ph[i] = rng.range(0, 6.28); d.dly[i] = rng.range(0, p.dissolveDur); d.size[i] = rng.range(3.5, 7); d.a0[i] = rng.range(0.32, 0.62); const j = rng.int(nC); d.tx[i] = cand[j * 2] + rng.range(-1, 1); d.ty[i] = cand[j * 2 + 1] + rng.range(-1, 1); d.gd[i] = rng.range(0, p.gatherDelay); d.gdur[i] = rng.range(p.gatherDur[0], p.gatherDur[1]); d.bow[i] = rng.sign() * rng.range(0.3, 1) * p.bow; d.gv[i] = rng(); }
+      s.dust = d; s.lit = new Uint8Array(L); s.dis = new Uint8Array(L); s.arrived = false; s.pool2 = new FX.ParticlePool(n * 5 + 100); s.dustMark = false; s.cy0 = p.slabY - L * p.slabH / 2; return s;
     },
-    proj(ctx, p) { const th = Math.PI * FX.prog(ctx.lt, p.rotStart, p.rotEnd, 'inOutSine'), cs = Math.cos(th), sn = Math.sin(th); return (x, y, z) => [p.cx + x * cs - z * sn, p.slabY - y + (x * sn + z * cs) * p.tilt]; },
-    ringR(tb, p) { return p.ringMax * FX.ease.outCubic(FX.clamp(tb / p.ringDur, 0, 1)); },
+    dissolveT(i, p) { return DUST_T + (p.layers - 1 - i) * p.dissolveGap; },
+    theta(T, p) { const k = FX.prog(T, p.orbitFrom, p.orbitFrom + 2.7, 'inOutSine'); return p.orbitBase * k + p.orbitAmp * Math.sin(2 * Math.PI * (T - p.orbitFrom) / p.orbitPeriod) * FX.prog(T, p.orbitFrom, p.orbitFrom + 2.7); },
+    proj(T, p) { const th = this.theta(T, p), cs = Math.cos(th), sn = Math.sin(th); return (x, y, z) => [p.cx + x * cs - z * sn, p.slabY - y + (x * sn + z * cs) * p.tilt]; },
+    layerColor(i, p, v) { return specColor(i, p.layers, v); },
     step(s, ctx, p) {
-      base.step.call(this, s, ctx, p); const T = ctx.t, dt = ctx.dt, rng = ctx.rng;
-      // ---- 时间标记（上升段 / 爆发点），阶段 B 按这些事件对齐 BGM ----
-      if (!s.riserOn && T >= RISER_T0) { s.riserOn = true; ctx.emit({ type: 'riser_start', marker: true, x: 0.5 }); }
-      while (T < RISER_T1 && T >= RISER_T0 + s.riserIdx * 0.5) { ctx.emit({ type: 'riser', marker: true, pitch: s.riserIdx, vel: 0.3 + 0.7 * (s.riserIdx / 6), x: 0.5 }); s.riserIdx++; }
-      // ---- 52 秒起：板层边缘剥落成细小粒子，缓慢飘浮并逐渐增多 ----
-      const P = this.proj(ctx, p), hw = p.slabW / 2, hd = p.depth / 2;
-      if (T >= p.flakeFrom && T < BURST_T + 2) {
-        const k = FX.prog(T, p.flakeFrom, BURST_T); s.fa += FX.lerp(p.flakeRate0, p.flakeRate1, k * k) * dt; const nl = Math.min(p.layers, s.landed + 1);
-        while (s.fa >= 1) { s.fa -= 1; const li = rng.int(nl), y = li * p.slabH + rng() * p.slabH; let x, z;
-          if (rng() < 0.45) { x = rng.sign() * hw; z = rng.range(-hd, hd); } else { x = rng.range(-hw, hw); z = rng.sign() * hd; }
-          const [sx, sy] = P(x, y, z); s.flk.spawn({ x: sx, y: sy, vx: rng.gauss() * 12 + Math.sign(x) * 8, vy: -rng.range(6, 28), size: rng.range(3, 6.5), color: FX.mix([0.18, 0.36, 0.92], [1, 1, 1], rng.range(0, 0.6)), alpha: rng.range(0.6, 1), life: rng.range(2.5, 4.2), shape: 1 }); }
-      }
-      s.flk.update(dt, { drag: 0.5, fade: 0.4 });
-      // ---- 56.0：亮环冲击波 + 塔碎成粒子 ----
-      const tb = T - BURST_T;
-      if (!s.burst && T >= BURST_T) {
-        s.burst = true; ctx.emit({ type: 'burst_marker', marker: true, x: 0.5 }); ctx.emit({ type: 'riser_end', marker: true, x: 0.5 }); ctx.emit({ type: 'burst', pitch: 0, vel: 1, x: 0.5 }); ctx.emit({ type: 'swoosh', pitch: 0, vel: 0.8, x: 0.5 });
-        ctx.hit({ ca: p.caBurst }); // 3 帧左右的轻微色差，不闪白
-        const n = p.count, H = p.layers * p.slabH, sh = { n, px: new Float32Array(n), py: new Float32Array(n), vx: new Float32Array(n), vy: new Float32Array(n), tx: new Float32Array(n), ty: new Float32Array(n), d: new Float32Array(n), rel: new Uint8Array(n), relT: new Float32Array(n), spin: new Float32Array(n), dur: new Float32Array(n), size0: new Float32Array(n), a0: new Float32Array(n), r: new Float32Array(n), g: new Float32Array(n), b: new Float32Array(n), gv: new Float32Array(n), hist: new Float32Array(M * n * 2), hi: 0 };
-        const cv = document.createElement('canvas'); cv.width = 1920; cv.height = 1080; const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.font = `bold ${p.fontSize}px ${FX.FONT_SERIF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(LAB('big_text'), 960, p.textY);
-        const img = g.getImageData(0, 0, 1920, 1080).data, cand = []; for (let y = 0; y < 1080; y += 2) for (let x = 0; x < 1920; x += 2) if (img[(y * 1920 + x) * 4 + 3] > 128) cand.push(x, y); const nC = cand.length / 2;
-        for (let i = 0; i < n; i++) {
-          const y = rng() * H, [sx, sy] = P(rng.range(-hw, hw), y, rng.range(-hd, hd)), li = Math.min(p.layers - 1, Math.floor(y / p.slabH)), c = FX.hsv(FX.lerp(p.hueLo, p.hueHi, li / (p.layers - 1)), 0.85, 1); // 色相 = 所在板层高度（低红 → 高紫）
-          sh.px[i] = sx; sh.py[i] = sy; sh.d[i] = Math.hypot(sx - p.cx, sy - s.cy0); sh.spin[i] = rng.sign() * rng.range(p.spin[0], p.spin[1]); sh.size0[i] = rng.range(5, 11); sh.a0[i] = rng.range(0.55, 1); sh.r[i] = c[0]; sh.g[i] = c[1]; sh.b[i] = c[2]; sh.gv[i] = rng();
-          const j = rng.int(nC); sh.tx[i] = cand[j * 2] + rng.range(-1, 1); sh.ty[i] = cand[j * 2 + 1] + rng.range(-1, 1); sh.dur[i] = p.gatherDur * rng.range(0.8, 1.2);
+      base.step.call(this, s, ctx, p); const T = ctx.t, d = s.dust, L = p.layers;
+      // 整体亮度上限：50 秒起压低曝光与泛光（只在本段生效，前面不动）
+      const lk = FX.prog(T, p.lumFrom, p.lumTo), P = FX.Runner.post; if (lk > 0) { P.exposure = FX.lerp(1.3, p.exposure, lk); P.bloomStrength = FX.lerp(1.3, p.bloom, lk); }
+      // 事件标记：每层点亮一个 layer_light（阶段 B 让音阶逐级上行）；56.0 化尘开始 dust_start；每层化尘一个 layer_dust
+      for (let i = 0; i < L; i++) {
+        if (!s.lit[i] && T >= LIGHT_T[i]) { s.lit[i] = 1; ctx.emit({ type: 'layer_light', marker: true, pitch: i, vel: 0.5 + 0.5 * i / (L - 1), x: 0.5 }); }
+        if (!s.dis[i] && T >= this.dissolveT(i, p)) {
+          s.dis[i] = 1; ctx.emit({ type: 'layer_dust', marker: true, pitch: L - 1 - i, x: 0.5 }); const P2 = this.proj(T, p), hw = p.slabW / 2, hd = p.depth / 2;
+          for (let k = i * p.dustPer; k < (i + 1) * p.dustPer; k++) { const [sx, sy] = P2(d.u[k] * hw, (i + d.v[k]) * p.slabH, d.w[k] * hd); d.x0[k] = sx; d.y0[k] = sy; d.on[k] = 1; }
         }
-        s.shat = sh;
       }
-      const sh = s.shat; if (!sh) return;
-      const R = this.ringR(tb, p), n = sh.n;
-      if (T >= p.gatherAt && !s.cap) s.cap = { t: T, x: Float32Array.from(sh.px), y: Float32Array.from(sh.py), vx: Float32Array.from(sh.vx), vy: Float32Array.from(sh.vy) };
-      const drag = Math.exp(-p.drag * dt);
-      for (let i = 0; i < n; i++) {
-        if (!sh.rel[i]) {
-          if (R < sh.d[i]) continue; // 亮环还没到：仍是塔的一部分
-          sh.rel[i] = 1; sh.relT[i] = T; const a = Math.atan2(sh.py[i] - s.cy0, sh.px[i] - p.cx) + rng.gauss() * 0.45, sp = FX.lerp(p.speed[0], p.speed[1], Math.pow(rng(), 0.8));
-          sh.vx[i] = Math.cos(a) * sp; sh.vy[i] = Math.sin(a) * sp; for (let m = 0; m < M; m++) { sh.hist[(m * n + i) * 2] = sh.px[i]; sh.hist[(m * n + i) * 2 + 1] = sh.py[i]; }
-        }
-        if (!s.cap) { // 飞散：初速快随后减速，速度方向缓缓旋转（螺旋）
-          const w = sh.spin[i] * Math.exp(-(T - sh.relT[i]) * 0.9) * dt, cs = Math.cos(w), sn = Math.sin(w), vx = sh.vx[i], vy = sh.vy[i];
-          sh.vx[i] = (vx * cs - vy * sn) * drag; sh.vy[i] = (vx * sn + vy * cs) * drag; sh.px[i] += sh.vx[i] * dt; sh.py[i] += sh.vy[i] * dt;
-        } else { // 收拢：从当前位置与速度平滑落到字形目标点
-          const D = sh.dur[i], u = FX.clamp((T - s.cap.t) / D, 0, 1), u2 = u * u, u3 = u2 * u;
-          sh.px[i] = (2 * u3 - 3 * u2 + 1) * s.cap.x[i] + (u3 - 2 * u2 + u) * s.cap.vx[i] * D + (3 * u2 - 2 * u3) * sh.tx[i]; sh.py[i] = (2 * u3 - 3 * u2 + 1) * s.cap.y[i] + (u3 - 2 * u2 + u) * s.cap.vy[i] * D + (3 * u2 - 2 * u3) * sh.ty[i];
-        }
-        sh.hist[(sh.hi * n + i) * 2] = sh.px[i]; sh.hist[(sh.hi * n + i) * 2 + 1] = sh.py[i];
-      }
-      sh.hi = (sh.hi + 1) % M;
-      // 爆发后的配乐音（沿用 burst_rainbow 的做法：越来越密、音高上升）
-      const kA = FX.clamp(tb / p.arpDuration, 0, 1), rate = FX.lerp(p.arpRateStart, p.arpRateEnd, kA) * (tb < p.arpDuration + 1.2 ? 1 : Math.max(0, 1 - (tb - p.arpDuration - 1.2) / 1.5));
-      s.arpAcc += rate * dt; while (s.arpAcc >= 1) { s.arpAcc -= 1; ctx.emit({ type: 'arp', pitch: Math.floor(kA * 12) + rng.int(4), vel: 0.5 + 0.5 * kA, x: rng() }); }
-      if (!s.arrived && s.cap && T >= s.cap.t + p.gatherDur * 1.1) { s.arrived = true; ctx.emit({ type: 'arrive', pitch: 4, vel: 0.9, x: 0.5 }); }
+      if (!s.dustMark && T >= DUST_T) { s.dustMark = true; ctx.emit({ type: 'dust_start', marker: true, x: 0.5 }); }
+      if (!s.arrived && T >= p.goldAt) { s.arrived = true; ctx.emit({ type: 'arrive', pitch: 4, vel: 0.9, x: 0.5 }); }
+    },
+    // 粒子在时刻 T 的位置（解析式：先萤火上飘，再沿弧线汇聚）。返回 [x, y, u]，u 为聚字进度
+    pos(d, i, T, ts, p) {
+      const tl = Math.max(0, T - ts), wob = 10, fx = d.x0[i] + Math.sin(T * 0.9 + d.ph[i]) * wob, fy = d.y0[i] - d.vy[i] * tl, Tg = p.gatherAt + d.gd[i];
+      if (T <= Tg) return [fx, fy, 0];
+      const D = d.gdur[i], u = FX.clamp((T - Tg) / D, 0, 1), sx = d.x0[i] + Math.sin(Tg * 0.9 + d.ph[i]) * wob, sy = d.y0[i] - d.vy[i] * Math.max(0, Tg - ts), vx = Math.cos(Tg * 0.9 + d.ph[i]) * wob * 0.9, vy = -d.vy[i];
+      const u2 = u * u, u3 = u2 * u, h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = 3 * u2 - 2 * u3, ex = d.tx[i] - sx, ey = d.ty[i] - sy, el = Math.hypot(ex, ey) + 1e-6, bw = Math.sin(Math.PI * u) * d.bow[i];
+      return [h00 * sx + h10 * vx * D + h01 * d.tx[i] - ey / el * bw, h00 * sy + h10 * vy * D + h01 * d.ty[i] + ex / el * bw, u];
     },
     draw(s, ctx, p) {
-      const T = ctx.t, tb = T - BURST_T, bgL = ctx.layers.bg, c = bgL.world(ctx.cam, ctx.px), R = this.ringR(tb, p);
-      // ---- 塔：亮度缓升；亮环扫过之处塔消失（已变成粒子）----
-      if (!(tb >= 0 && R > 900)) {
-        const bright = 1 + (p.brightMax - 1) * FX.prog(T, p.flakeFrom, BURST_T, 'inQuad');
-        c.save(); if (bright > 1.001) c.filter = `brightness(${bright})`;
-        if (tb >= 0) { c.beginPath(); c.rect(-4000, -4000, 9000, 9000); c.arc(p.cx, s.cy0, R, 0, 6.2832); c.clip('evenodd'); }
-        base.draw.call(this, s, ctx, p); c.restore();
-      }
-      ctx.points(s.flk, 'add');
-      const sh = s.shat;
-      if (sh) {
-        const pool = s.pool2, n = sh.n, gold = p.gold, g = FX.prog(T, p.goldAt, p.goldAt + p.goldDur, 'inOutSine'), kk = FX.prog(T, p.sweepT0, p.sweepT0 + p.sweepDur), xb = FX.lerp(300, 1620, kk), gather = s.cap ? FX.prog(T, s.cap.t, s.cap.t + p.gatherDur) : 0;
-        pool.clear();
-        for (let i = 0; i < n; i++) {
-          if (!sh.rel[i]) continue; const age = T - sh.relT[i];
-          let r = sh.r[i], gg = sh.g[i], b = sh.b[i];
-          if (g > 0) { const w = FX.mix(gold, [1, 1, 1], sh.gv[i] * 0.35); r = FX.lerp(r, w[0], g); gg = FX.lerp(gg, w[1], g); b = FX.lerp(b, w[2], g); }
-          if (kk > 0 && kk < 1) { const dx = (sh.px[i] - xb) / p.sweepHalf, wgt = Math.exp(-dx * dx) * 0.95; if (wgt > 0.02) { const rb = FX.hsv(FX.clamp((sh.px[i] - 300) / 1320, 0, 1) * p.hueHi, 0.85, 1); r = FX.lerp(r, rb[0], wgt); gg = FX.lerp(gg, rb[1], wgt); b = FX.lerp(b, rb[2], wgt); } }
-          const size = FX.lerp(sh.size0[i], 4.5, gather) * (1 - 0.3 * FX.clamp(age / 3, 0, 1) * (1 - gather)), a = sh.a0[i] * (1 - 0.5 * gather * (1 - g)) * (1 + 0.35 * Math.exp(-age * 6)) * (0.9 + 0.1 * Math.sin(T * 3 + i));
-          const col = [r, gg, b]; pool.spawn({ x: sh.px[i], y: sh.py[i], size, color: col, alpha: Math.min(1, a), shape: 1 });
-          for (let j = 0; j < LAGS.length; j++) { const slot = (sh.hi - 1 - LAGS[j] + 2 * M) % M, hx = sh.hist[(slot * n + i) * 2], hy = sh.hist[(slot * n + i) * 2 + 1]; if (Math.abs(hx - sh.px[i]) + Math.abs(hy - sh.py[i]) < 1.5) break; pool.spawn({ x: hx, y: hy, size: size * (1 - LAGS[j] * 0.06), color: col, alpha: Math.min(1, a) * 0.5 * (1 - LAGS[j] / 11), shape: 1 }); }
+      const T = ctx.t, F = ctx.fade, lt = ctx.lt, L = p.layers, c = big(ctx).layers.bg.world(ctx.cam, ctx.px), th = this.theta(T, p), cs = Math.cos(th), sn = Math.sin(th);
+      const Pj = (x, y, z) => [p.cx + x * cs - z * sn, p.slabY - y + (x * sn + z * cs) * p.tilt], hw = p.slabW / 2, hd = p.depth / 2, blue = FX.hex(p.blue);
+      const css = (col, k) => FX.rgbCss(col.map(v => FX.clamp(v * k, 0, 1)));
+      const drawBox = (y0, h, alpha, col, glow) => {
+        const faces = [{ n: [0, 1], pts: [[-hw, hd], [hw, hd]] }, { n: [1, 0], pts: [[hw, hd], [hw, -hd]] }, { n: [0, -1], pts: [[hw, -hd], [-hw, -hd]] }, { n: [-1, 0], pts: [[-hw, -hd], [-hw, hd]] }];
+        faces.sort((a, b) => (a.n[0] * sn + a.n[1] * cs) * p.tilt - (b.n[0] * sn + b.n[1] * cs) * p.tilt); c.globalAlpha = alpha;
+        if (glow > 0) { c.shadowColor = css(col, 1); c.shadowBlur = 26 * ctx.px * glow; }
+        for (const f of faces) {
+          const [a, b] = f.pts, light = 0.55 + 0.45 * FX.clamp((f.n[0] * cs - f.n[1] * sn) * 0.5 + 0.5, 0, 1), p1 = Pj(a[0], y0, a[1]), p2 = Pj(b[0], y0, b[1]), p3 = Pj(b[0], y0 + h, b[1]), p4 = Pj(a[0], y0 + h, a[1]);
+          c.fillStyle = css(col, light * 0.8); c.beginPath(); c.moveTo(...p1); c.lineTo(...p2); c.lineTo(...p3); c.lineTo(...p4); c.closePath(); c.fill(); c.shadowBlur = 0; c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 1; c.stroke();
         }
-        ctx.points(pool, 'add');
+        const tp = [Pj(-hw, y0 + h, -hd), Pj(hw, y0 + h, -hd), Pj(hw, y0 + h, hd), Pj(-hw, y0 + h, hd)]; c.fillStyle = css(col, 1.25); c.beginPath(); c.moveTo(...tp[0]); for (const q of tp.slice(1)) c.lineTo(...q); c.closePath(); c.fill(); c.strokeStyle = 'rgba(255,255,255,0.6)'; c.stroke();
+      };
+      let topY = 0, any = false;
+      for (let i = 0; i < L; i++) {
+        let y = i * p.slabH, alpha = F, h = p.slabH;
+        if (i > 0) { const t0 = p.firstAt + (i - 1) * p.gap, k = FX.prog(lt, t0, t0 + p.dropDur, 'inQuad'); if (k <= 0) continue; y = i * p.slabH + (1 - k) * 260; alpha = F * Math.min(1, k * 3); const sq = lt > t0 + p.dropDur ? 1 - 0.12 * Math.sin(Math.PI * FX.prog(lt, t0 + p.dropDur, t0 + p.dropDur + 0.22)) : 1; h = p.slabH * sq; }
+        const dk = FX.prog(T, this.dissolveT(i, p), this.dissolveT(i, p) + p.dissolveDur); if (dk >= 1) continue; any = true; topY = Math.max(topY, (i + 1) * p.slabH);
+        const litK = FX.prog(T, LIGHT_T[i], LIGHT_T[i] + p.litDur, 'outCubic'), lift = p.lift * Math.sin(Math.PI * FX.prog(T, LIGHT_T[i], LIGHT_T[i] + 0.6)), col = FX.mix(blue, this.layerColor(i, p, 0.62), litK);
+        drawBox(y + lift + dk * 8, h, alpha * (1 - dk), col, litK * (1 - dk) * (1 - FX.prog(T, LIGHT_T[i] + 0.5, LIGHT_T[i] + 1.4) * 0.5));
       }
-      // ---- 亮环冲击波（亮度上限约 50%）----
-      if (tb >= 0 && tb < p.ringDur) {
-        const f = ctx.layers.fg.world(ctx.cam, ctx.px), k = tb / p.ringDur, al = p.ringAlpha * Math.pow(1 - k, 1.3), gr = f.createRadialGradient(p.cx, s.cy0, Math.max(0, R - p.ringWidth), p.cx, s.cy0, R + 24);
-        gr.addColorStop(0, 'rgba(235,240,255,0)'); gr.addColorStop(0.8, `rgba(235,240,255,${al})`); gr.addColorStop(1, 'rgba(235,240,255,0)'); f.fillStyle = gr; f.fillRect(-1000, -1000, 4000, 3000);
+      // 宽度标注（60″）与高度标注（分量），塔化尘后淡出
+      const lab = 1 - FX.prog(T, DUST_T, DUST_T + 0.6);
+      if (lab > 0 && any) {
+        c.globalAlpha = F * 0.85 * lab; c.fillStyle = '#FFFFFF'; c.font = `30px ${FX.FONT_MONO}`; c.textAlign = 'center'; const lb = Pj(0, -40, hd); c.fillText(p.label, lb[0], lb[1]); c.textAlign = 'left';
+        const hk = FX.prog(lt, p.firstAt + 2 * p.gap, p.firstAt + 3 * p.gap); if (hk > 0) { const side = th < Math.PI / 2 ? -1 : 1, a = Pj(side * (hw + 60), 0, 0), b = Pj(side * (hw + 60), Math.min(L, s.landed + 1) * p.slabH, 0); c.globalAlpha = F * hk * 0.85 * lab; c.strokeStyle = '#FFFFFF'; c.lineWidth = 1; c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.stroke(); c.font = `33px ${FX.FONT_SERIF}`; c.textAlign = side < 0 ? 'right' : 'left'; c.shadowColor = 'rgba(0,0,0,0.8)'; c.shadowBlur = 8; c.fillText('高度 = 分量', b[0] + side * 14, (a[1] + b[1]) / 2 + 8); c.shadowBlur = 0; c.textAlign = 'left'; }
       }
+      c.globalAlpha = 1;
+      // ---- 粒子：萤火上飘 → 汇聚成字 ----
+      const d = s.dust; if (T < DUST_T) return;
+      const pool = s.pool2, g = FX.prog(T, p.goldAt, p.goldAt + p.goldDur, 'inOutSine'), kk = FX.prog(T, p.sweepT0, p.sweepT0 + p.sweepDur), xb = FX.lerp(300, 1620, kk), dtf = ctx.dt; pool.clear();
+      for (let i = 0; i < d.n; i++) {
+        if (!d.on[i]) continue; const li = Math.floor(i / p.dustPer), ts = this.dissolveT(li, p), vis = FX.prog(T, ts + d.dly[i], ts + d.dly[i] + 0.3); if (vis <= 0) continue;
+        const [x, y, u] = this.pos(d, i, T, ts, p); let col = this.layerColor(li, p, 1);
+        if (g > 0) { const w = FX.mix(p.gold, [1, 1, 1], d.gv[i] * 0.35); col = FX.mix(col, w, g); }
+        if (kk > 0 && kk < 1) { const dx = (x - xb) / p.sweepHalf, wgt = Math.exp(-dx * dx) * 0.95; if (wgt > 0.02) col = FX.mix(col, FX.hsv(FX.clamp(0.5 + (x - xb) / (2 * p.sweepHalf), 0, 1) * 0.76, 0.9, 1), wgt); }
+        const a = d.a0[i] * vis * (0.85 + 0.15 * Math.sin(T * 3 + d.ph[i])), size = d.size[i] * (1 - 0.35 * u);
+        pool.spawn({ x, y, size, color: col, alpha: a, shape: 1 });
+        if (i % 4 === 0) pool.spawn({ x, y, size: size * 3.2, color: this.layerColor(li, p, 1), alpha: p.fringe * vis * (u > 0.99 ? 1 : 0.7), shape: 0 }); // 柔光 / 极淡彩边
+        if (u > 0 && u < 1) for (const lag of [2, 4, 6]) { const q = this.pos(d, i, T - lag * dtf, ts, p); pool.spawn({ x: q[0], y: q[1], size: size * (1 - lag * 0.1), color: col, alpha: a * 0.45 * (1 - lag / 8), shape: 1 }); }
+      }
+      ctx.points(pool, 'add');
       const ks = FX.prog(T, p.subAt, p.subAt + 0.6, 'outCubic');
-      if (ks > 0) { const f = ctx.layers.fg.world(ctx.cam, ctx.px); f.globalAlpha = 0.9 * ks; f.fillStyle = FX.rgbCss(p.gold); f.font = `42px ${FX.FONT_MONO}`; f.textAlign = 'center'; f.fillText(LAB('almost').split('').join(' '), 960, p.subY + (1 - ks) * 10); f.textAlign = 'left'; f.globalAlpha = 1; }
+      if (ks > 0) { const f = ctx.layers.fg.world(ctx.cam, ctx.px); f.globalAlpha = 0.8 * ks; f.fillStyle = FX.rgbCss(p.gold); f.font = `42px ${FX.FONT_MONO}`; f.textAlign = 'center'; f.fillText(LAB('almost').split('').join(' '), 960, p.subY + (1 - ks) * 10); f.textAlign = 'left'; f.globalAlpha = 1; }
     },
   }));
 }
@@ -267,13 +257,8 @@ const BURST_T = 56.0, RISER_T0 = 53.0, RISER_T1 = 56.0;
 FX.scene({
   name: 'gentlest_word', duration: 64, palette: 'deep_night', seed: 2026,
   post: { bloomStrength: 1.3, bloomThreshold: 0.4, exposure: 1.3, vignette: 0.45, noise: 0.03 },
-  // 时间标记（阶段 B 按此对齐 BGM）：爆发点固定 56.0 秒；上升段 53.0–56.0 秒（事件日志里有 riser_start / riser / riser_end / burst_marker）
-  markers: { burst: BURST_T, riser: { t0: RISER_T0, t1: RISER_T1 } },
-  // 镜头：52–56 缓慢推近（偏向塔中心），爆发后回拉到正常取景
-  camera(t, cam) {
-    const f = t < 52 ? 0 : t < BURST_T ? FX.ease.inOutSine(FX.prog(t, 52, BURST_T)) : 1 - FX.prog(t, BURST_T, 58.5, 'outCubic'); if (f <= 0) return {};
-    return { x: FX.lerp(cam.x, 1170, f * 0.8), y: FX.lerp(cam.y, 500, f * 0.8), zoom: cam.zoom * (1 + 0.18 * f) };
-  },
+  // 时间标记（阶段 B 按此对齐 BGM）：56.0 秒 = 化尘开始；50.0–56.0 秒逐层点亮，每层一个 layer_light 事件（时刻见 light.times）
+  markers: { dust_start: DUST_T, light: { t0: 50.0, t1: 56.0, times: LIGHT_T } },
   shots: [
     { preset: 'chat_bubble_storm',      t: 0,    end: 4.3,  fadeOut: 0.5 },
     { preset: 'dirichlet_chat',         t: 3.9,  end: 19.3, fadeIn: 0.6, fadeOut: 0.3, params: { zooms: [{ t0: 0.5, t1: 3.4, factor: 9 }, { t0: 3.9, t1: 6.6, factor: 9 }], numberStart: 7.0, numberRate: 5.5, grayRatio: 0.14, density: 260 } },
@@ -281,8 +266,9 @@ FX.scene({
     { preset: 'banknote_chat_sort',     t: 24,   end: 32.2, fadeIn: 0.3, fadeOut: 0.3 },
     { preset: 'bubbles_to_light',       t: 32,   end: 42.2, fadeIn: 0.3, fadeOut: 0.4, params: { counterFreeze: 8.0 } },
     { preset: 'voice_bubble_right',     t: 42,   end: 47.5, fadeIn: 0.2 },
-    { preset: 'slab_tower_burst',       t: 47.5, end: 64 },
-    { preset: 'tower_with_gray_line',   t: 42,   end: 56.8, fadeIn: 0.2, fadeOut: 0.8 },
+    { preset: 'slab_tower_finale',      t: 47.5, end: 64 },
+    { preset: 'tower_with_gray_line',   t: 42,   end: 58.6, fadeIn: 0.2, fadeOut: 0.6 },
+    { preset: 'caption_pad',            t: 0,    end: 4.4, fadeOut: 0.4, params: { from: 0.42, alpha: 0.9 } }, // 钩子段字幕垫底更深
     { preset: 'caption_pad',            t: 0,    end: 64 },
   ],
   // 每幕至少一次光带扫过（爆发前近乎单色，光带都很淡）
@@ -295,7 +281,7 @@ FX.scene({
     { t: 38.0, type: 'sweep', dur: 1.8, angle: -0.5, intensity: 0.11, width: 0.09, color: '#E8B931' },
     { t: 45.0, type: 'sweep', dur: 1.6, angle: -0.6, intensity: 0.10, width: 0.08, color: '#2F5BEA' },
     { t: 51.0, type: 'sweep', dur: 1.6, angle: -0.6, intensity: 0.09, width: 0.08, color: '#2F5BEA' },
-    { t: 59.0, type: 'sweep', dur: 1.8, angle: -0.55, intensity: 0.30, width: 0.10 },
+    { t: 60.4, type: 'sweep', dur: 1.8, angle: -0.55, intensity: 0.16, width: 0.10 },
   ],
   // 配乐（numpy 合成的和弦垫 / 低音），音效由各预设的事件产生
   music: { layers: [
