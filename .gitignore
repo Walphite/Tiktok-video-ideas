@@ -1,3 +1,6 @@
 # fxlab 中间产物（帧段、事件日志、联系图）不进仓库；成片与预览显式提交
 fxlab/build/
 node_modules/
+# 场景输出中的中间音轨与无音乐副本不进仓库（B 部分的 sfx/mix 等会单独提交）
+fxlab/scenes/*/out/*.wav
+fxlab/scenes/*/out/*_无音乐.mp4
