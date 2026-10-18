@@ -77,6 +77,9 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
       }
       c.globalAlpha = 1;
       base.draw.call(this, s, big(ctx), Object.assign({}, p, { gray: 'rgba(0,0,0,0)', bubbleW: bw, bubbleH: bh })); // 坐标轴、编号、黄点
+      // 数轴两端标注（script.json labels.axis_left / axis_right）：整年摊成一条线时在，放大开始后淡出
+      const ka = (1 - FX.prog(t, 0.3, 2.0)) * FX.prog(t, 0, 0.3) * F;
+      if (ka > 0) { const ua = ctx.layers.ui.screen(ctx.px); labelText(ua, LAB('axis_left'), 28, p.axisY - 34, 34, '#FFFFFF', ka * 0.9, 'left'); labelText(ua, LAB('axis_right'), ctx.vw - 28, p.axisY - 34, 34, '#FFFFFF', ka * 0.9, 'right'); }
       // 图例（屏幕固定，右侧留 6% 边距）
       const u = ctx.layers.ui.screen(ctx.px), k = FX.prog(t, 0.8, 1.4, 'outCubic') * F, R = ctx.vw * 0.94;
       if (k > 0) {
@@ -97,7 +100,11 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
   FX.registerPreset('riemann_amber', Object.assign({}, base, {
     params: Object.assign({}, base.params, { riseEnd: 1.5, jitterEnd: 2.5, collapseEnd: 3.2, stampAt: 3.13 }),
     step(s, ctx, p) { const c2 = Object.create(ctx); c2.hit = (o) => ctx.hit(Object.assign({}, o, { flash: 0, shake: Math.min(o.shake || 0, 16), ca: Math.min(o.ca || 0, 5) })); base.step.call(this, s, c2, p); },
-    draw(s, ctx, p) { const c2 = Object.create(ctx); c2.layers = { bg: ctx.layers.bg, fg: { world: () => sink, screen: () => sink }, ui: ctx.layers.ui }; base.draw.call(this, s, c2, p); },
+    draw(s, ctx, p) {
+      const c2 = Object.create(ctx); c2.layers = { bg: ctx.layers.bg, fg: { world: () => sink, screen: () => sink }, ui: ctx.layers.ui }; base.draw.call(this, s, c2, p);
+      const k = FX.prog(ctx.lt, p.stampAt + 0.1, p.stampAt + 0.5) * ctx.fade;   // 印章（center 层的线框）下方的小标
+      if (k > 0) labelText(ctx.layers.ui.screen(ctx.px), LAB('stamp_sub'), ctx.vw / 2, 700, 34, '#E8B931', k * 0.9);
+    },
   }));
 }
 
@@ -143,6 +150,7 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
         const k = mv(v.delay), w = FX.lerp(150, 200, k), h = FX.lerp(52, 44, k), x = FX.lerp(v.x0, p.voiceX, k), y1 = gy - 22 - v.k * p.voiceStep, y = FX.lerp(v.y0 + Math.sin(t * 2 + v.ph) * 3, y1, k) - Math.sin(k * Math.PI) * 40;
         chatBubble(c, x, y, w, h, p.denominations[2].color, appear, LAB('voice_tag'), 1, 28, '#FFFFFF');
       }
+      const kb = FX.prog(t, 1.8, 2.2) * F; if (kb > 0) labelText(ctx.layers.ui.screen(ctx.px), LAB('banknote_sub'), ctx.vw / 2, 440, 34, '#FFFFFF', kb * 0.85);   // 钞票旁小标
       const lab = FX.prog(t, p.bubbleSortAt + 1.5, p.bubbleSortAt + 2.0) * appear;
       if (lab > 0) { labelText(c, LAB('sort_greet'), (p.greetX[0] + p.greetX[1]) / 2, gy + 54, 36, '#FFFFFF', lab * 0.95); labelText(c, LAB('sort_count'), (p.greetX[0] + p.greetX[1]) / 2, gy - 48, 40, '#C9CED8', lab * 0.95); labelText(c, LAB('sort_voice'), p.voiceX, gy + 54, 36, '#FFFFFF', lab * 0.95); }
     },
@@ -157,6 +165,11 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
   FX.registerPreset('bubbles_calm', Object.assign({}, base, {
     params: Object.assign({}, base.params, { extinguishStart: 0.2, extinguishEnd: 3.0, counterStart: 0.3, counterFreeze: 3.19, silence: 0.55 }),
     step(s, ctx, p) { base.step.call(this, s, noFlash(ctx), p); },
+    draw(s, ctx, p) {
+      base.draw.call(this, s, ctx, p);
+      const k = FX.prog(ctx.lt, p.counterStart, p.counterStart + 0.4) * ctx.fade;   // 计数器「∫ = …」下方的小标
+      if (k > 0) labelText(ctx.layers.ui.screen(ctx.px), LAB('counter_sub'), ctx.vw * 0.94, 126, 28, '#E8B931', k * 0.9, 'right');
+    },
   }));
 }
 
@@ -282,8 +295,8 @@ const DUST_T = u(21), LIGHT_T = [12, 9, 7, 5, 3.5, 2.5, 1.5, 0.5].map(b => DUST_
       // 宽度标注（60″）与高度标注（分量），塔化尘后淡出
       const lab = 1 - FX.prog(T, DUST_T, DUST_T + 0.6);
       if (lab > 0 && any) {
-        c.globalAlpha = F * 0.85 * lab; c.fillStyle = '#FFFFFF'; c.font = `30px ${FX.FONT_MONO}`; c.textAlign = 'center'; const lb = Pj(0, -40, hd); c.fillText(p.label, lb[0], lb[1]); c.textAlign = 'left';
-        const hk = FX.prog(lt, p.firstAt + 7 * p.gap, p.firstAt + 8 * p.gap);  // 塔全部落定后才出现「高度 = 分量」，避免与左侧灰线标注相邻 if (hk > 0) { const side = th < Math.PI / 2 ? -1 : 1, a = Pj(side * (hw + 60), 0, 0), b = Pj(side * (hw + 60), Math.min(L, s.landed + 1) * p.slabH, 0); c.globalAlpha = F * hk * 0.85 * lab; c.strokeStyle = '#FFFFFF'; c.lineWidth = 1; c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.stroke(); c.font = `33px ${FX.FONT_SERIF}`; c.textAlign = side < 0 ? 'right' : 'left'; c.shadowColor = 'rgba(0,0,0,0.8)'; c.shadowBlur = 8; c.fillText('高度 = 分量', b[0] + side * 14, (a[1] + b[1]) / 2 + 8); c.shadowBlur = 0; c.textAlign = 'left'; }
+        c.globalAlpha = F * 0.85 * lab; c.fillStyle = '#FFFFFF'; c.font = `33px ${FX.FONT_SERIF}`; c.textAlign = 'center'; const lb = Pj(0, -40, hd); c.shadowColor = 'rgba(0,0,0,0.8)'; c.shadowBlur = 8; c.fillText(LAB('tower_width'), lb[0], lb[1]); c.shadowBlur = 0; c.textAlign = 'left';
+        const hk = FX.prog(lt, p.firstAt + 7 * p.gap, p.firstAt + 8 * p.gap);  // 塔全部落定后才出现「高度 = 分量」，避免与左侧灰线标注相邻 if (hk > 0) { const side = th < Math.PI / 2 ? -1 : 1, a = Pj(side * (hw + 60), 0, 0), b = Pj(side * (hw + 60), Math.min(L, s.landed + 1) * p.slabH, 0); c.globalAlpha = F * hk * 0.85 * lab; c.strokeStyle = '#FFFFFF'; c.lineWidth = 1; c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.stroke(); c.font = `33px ${FX.FONT_SERIF}`; c.textAlign = side < 0 ? 'right' : 'left'; c.shadowColor = 'rgba(0,0,0,0.8)'; c.shadowBlur = 8; c.fillText(LAB('tower_height'), b[0] + side * 14, (a[1] + b[1]) / 2 + 8); c.shadowBlur = 0; c.textAlign = 'left'; }
       }
       c.globalAlpha = 1;
       // ---- 粒子：萤火上飘 → 汇聚成字 ----
