@@ -1,14 +1,18 @@
 // ============================================================
-// 成片场景：《数学里最温柔的一个词》约 64 秒
-// 文案全部在同目录 script.json（含 labels 段）；这里只负责「哪个预设、什么时候、什么参数、配乐与光带」
-// 时间轴（秒）：0–4 钩子 | 4–19 稠密与可数 | 19–24 黎曼 | 24–32 勒贝格（钞票 + 气泡分堆）| 32–42 结算
-//               | 42–56 那一层（灰色细线 + 蓝塔）| 56–64 彩虹爆发（固定 56.0）与收尾
-// 不改引擎与既有预设：本幕需要的变体都在下面用「包装预设」实现（调用原预设，再叠加画面）
+// 成片场景：《数学里最温柔的一个词》V2（76.5 秒 = 24U，U = 6 拍 = 3.188 秒）
+// 文案全部在同目录 script.json（含 labels 段与 layer 字段）；这里只负责「哪个预设、什么时候、什么参数、光带」
+// 时间轴（U）：0–2 钩子 | 2–8 稠密与可数 | 8–10 黎曼 | 10–13 勒贝格（钞票 + 气泡分堆）| 13–15 结算
+//               | 15–21 那一层（语音气泡 → 蓝塔，17–19 安静段，19–21 逐层点亮）| 21–24 化尘 → 聚字 → 收尾（化尘开始 = 21U）
+// 闪白切 3 处（2U、8U、13U）；15U 为渐黑再渐显；安静段 4–8U、17–19U；连续运镜：2–4U 放大、21U 起缓慢拉远
+// 不改既有预设：本片需要的变体都在下面用「包装预设」实现（调用原预设，再叠加画面）
 // ============================================================
 
 // ---------- 手机可读：字幕 / HUD / 计数器整体放大约 1.5 倍（只改本片运行时的版面参数）----------
 for (const L of Object.values(FX.layouts)) { L.subSize = Math.round(L.subSize * 1.5); L.hudSize = Math.round(L.hudSize * 1.5); L.counterSize = Math.round(L.counterSize * 1.5); }
 
+const U = 3.188261, u = (k) => k * U, TOTAL = u(24);   // U：BGM 实测拍间隔 0.5314 s × 6 拍
+FX.palettes.deep_night.bg = '#08090E';                  // 背景近黑
+const noFlash = (ctx) => { const c2 = Object.create(ctx); c2.hit = (o) => ctx.hit(Object.assign({}, o, { flash: 0 })); return c2; };  // 闪白只留给镜头切换：预设自带的闪白一律去掉
 const LAB = (k) => { const v = ((FX.Runner.script || {}).labels || {})[k]; if (v == null) throw new Error('script.json 缺少 labels.' + k); return v; };
 
 // 字体放大代理：把原预设里 ≤ maxPx 的小字按 f 倍放大（大标题、印章不动）
@@ -31,15 +35,22 @@ function chatBubble(c, x, y, w, h, fill, alpha, text, textAlpha, fontPx, textCol
 const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha = alpha; c.fillStyle = color; c.font = `bold ${size}px ${FX.FONT_SERIF}`; c.textAlign = align || 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(0,0,0,0.85)'; c.shadowBlur = 10; c.fillText(text, x, y); c.shadowBlur = 0; c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.globalAlpha = 1; };
 
 // ============================================================
+// 钩子：风暴末 1.3 秒加速涌向镜头（蓄力），切点处由闪白接住
+// ============================================================
+FX.registerPreset('storm_charge', Object.assign({}, FX.presets.chat_bubble_storm, {
+  step(s, ctx, p) { p.speed = 1 + 1.8 * FX.prog(ctx.lt, ctx.shotDuration - 1.3, ctx.shotDuration, 'inQuad'); FX.presets.chat_bubble_storm.step.call(this, s, ctx, p); },
+}));
+
+// ============================================================
 // A1 dirichlet_chat：灰点始终是聊天气泡（缩小有轮廓，放大有字），图例标注
 // ============================================================
 {
   const base = FX.presets.dirichlet_field, big = bigFont(1.5, 40);
   FX.registerPreset('dirichlet_chat', Object.assign({}, base, {
     描述: '狄利克雷点阵：灰点 = 聊天气泡（带字），黄点 = 其余时间，带图例',
-    params: Object.assign({}, base.params, { chatW0: 46, chatW1: 92, textFrom: 62 }),
+    params: Object.assign({}, base.params, { chatW0: 46, chatW1: 92, textFrom: 62, numberRate0: 5.5 }),
     init(ctx, p) { return base.init.call(this, big(ctx), p); },
-    step(s, ctx, p) { base.step.call(this, s, big(ctx), p); },
+    step(s, ctx, p) { const lt = ctx.lt; p.flicker = lt < 6.4 ? 2.2 : 0.9; p.numberRate = p.numberRate0 + 9 * FX.prog(lt, ctx.shotDuration - 1.6, ctx.shotDuration, 'inQuad'); base.step.call(this, s, big(ctx), p); },  // 放大结束后进入安静段（点位缓闪）；切点前编号加速（蓄力）
     draw(s, ctx, p) {
       const t = ctx.lt, F = ctx.fade, S = s.S, g = FX.clamp(Math.log(S) / Math.log(81), 0, 1), G = LAB('greetings');
       const bw = FX.lerp(p.chatW0, p.chatW1, g), bh = bw * 0.62, c = ctx.layers.bg.world(ctx.cam, ctx.px), cx = ctx.vw / 2;
@@ -63,6 +74,18 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
 }
 
 // ============================================================
+// 黎曼：印章改由 center 层「不可积」+ 琥珀发光线框承担，这里不再画红色印章，也不闪白
+// ============================================================
+{
+  const base = FX.presets.riemann_bars_collapse, sink = document.createElement('canvas').getContext('2d');
+  FX.registerPreset('riemann_amber', Object.assign({}, base, {
+    params: Object.assign({}, base.params, { riseEnd: 1.5, jitterEnd: 2.5, collapseEnd: 3.2, stampAt: 3.13 }),
+    step(s, ctx, p) { const c2 = Object.create(ctx); c2.hit = (o) => ctx.hit(Object.assign({}, o, { flash: 0, shake: Math.min(o.shake || 0, 16), ca: Math.min(o.ca || 0, 5) })); base.step.call(this, s, c2, p); },
+    draw(s, ctx, p) { const c2 = Object.create(ctx); c2.layers = { bg: ctx.layers.bg, fg: { world: () => sink, screen: () => sink }, ui: ctx.layers.ui }; base.draw.call(this, s, c2, p); },
+  }));
+}
+
+// ============================================================
 // A2 banknote_chat_sort：钞票按面额分堆（约 2 秒）→ 钞票上移保留 → 灰气泡也按分量分堆
 // ============================================================
 {
@@ -70,9 +93,10 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
   FX.registerPreset('banknote_chat_sort', Object.assign({}, base, {
     描述: '钞票分堆；随后问候气泡摊成贴地细线，60″ 语音气泡立起一摞',
     params: Object.assign({}, base.params, {
-      fieldAt: 999, cutSwitchAt: 999, sortStart: 0.4, sortDur: 1.5, // 钞票约 2 秒分好；不再回点阵
-      shrinkAt: 3.4, shrinkDur: 0.8, shrinkScale: 0.85, shrinkBaseY: 300, // 钞票堆上移保留
-      bubbleAt: 3.9, bubbleSortAt: 4.6, bubbleMove: 0.8, groundY: 660,
+      fieldAt: 999, cutSwitchAt: 999, sortStart: 0.15, sortDur: 1.3, // 钞票约 1U 分好；不再回点阵
+      shrinkAt: 2.4, shrinkDur: 0.8, shrinkScale: 0.85, shrinkBaseY: 300, // 钞票堆上移保留
+      bubbleAt: 2.9, bubbleSortAt: 3.3, bubbleMove: 0.8, groundY: 660,
+      denominations: [{ value: 1, color: '#8C929E' }, { value: 5, color: '#DADFE8' }, { value: 10, color: '#2F5BEA' }, { value: 20, color: '#E8B931' }], // 灰 / 白 / 蓝 / 琥珀，去掉绿色
       greetN: 34, voiceN: 6, greetX: [260, 860], voiceX: 1580, voiceStep: 50,
     }),
     sounds: Object.assign({}, base.sounds),
@@ -110,6 +134,17 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
 }
 
 // ============================================================
+// 结算：熄灭加速收束，计数器在 1U 处定格；定格时的白闪去掉
+// ============================================================
+{
+  const base = FX.presets.bubbles_to_light;
+  FX.registerPreset('bubbles_calm', Object.assign({}, base, {
+    params: Object.assign({}, base.params, { extinguishStart: 0.2, extinguishEnd: 3.0, counterStart: 0.3, counterFreeze: 3.19, silence: 0.55 }),
+    step(s, ctx, p) { base.step.call(this, s, noFlash(ctx), p); },
+  }));
+}
+
+// ============================================================
 // A3 那一层：蓝塔右移，左侧留灰色问候细线与标注
 // ============================================================
 {
@@ -120,11 +155,11 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
     step(s, ctx, p) { base.step.call(this, s, big(ctx), p); },
     draw(s, ctx, p) { base.draw.call(this, s, big(ctx), p); },
   }));
-  wrapP(vb, 'voice_bubble_right', {});
-  wrapP(st, 'slab_tower_right', { rotEnd: 8.0 });
+  wrapP(vb, 'voice_bubble_right', { slabH: 48, appearAt: 0.2, expandAt: 0.9, expandDur: 0.9 });
+  wrapP(st, 'slab_tower_right', { rotEnd: 8.0, slabH: 48, firstAt: 0.4, gap: 0.4, dropDur: 0.3 });  // 塔每层 48 高：给上部 headline 让出位置
   FX.registerPreset('tower_with_gray_line', {
     描述: '灰色问候层缩成左侧细线（高度 0）并标注；蓝塔上方标注 60″ × 满格',
-    params: { x0: 110, x1: 600, y: 700, drawDur: 1.4, towerLabelY: 205, towerTop: 7 },
+    params: { x0: 110, x1: 600, y: 700, drawDur: 1.4, towerLabelY: 252, towerTop: 7 },
     init() { return {}; }, step() {},
     draw(s, ctx, p) {
       const t = ctx.lt, F = ctx.fade, c = ctx.layers.bg.world(ctx.cam, ctx.px), k = FX.prog(t, 0.2, 0.2 + p.drawDur, 'outCubic');
@@ -133,7 +168,7 @@ const labelText = (c, text, x, y, size, color, alpha, align) => { c.globalAlpha 
         for (let x = p.x0; x < FX.lerp(p.x0, p.x1, k); x += 22) chatBubble(c, x + 8, p.y - 2, 20, 3, '#8C929E', 0.9 * F, null, 0, 0, null); // 细线里一个个压扁的气泡
       }
       const a = FX.prog(t, 1.0, 1.6); if (a > 0) labelText(c, LAB('line_zero'), p.x0, p.y - 56, 36, '#FFFFFF', a * F * 0.95, 'left');
-      const b = FX.prog(t, 9.2, 9.9); if (b > 0) labelText(c, LAB('tower_full'), 1190, p.towerLabelY, 42, '#8FB0FF', b * F * 0.95);
+      const b = FX.prog(t, 5.6, 6.3); if (b > 0) labelText(c, LAB('tower_full'), 1190, p.towerLabelY, 42, '#8FB0FF', b * F * 0.95);
     },
   });
 }
@@ -155,19 +190,19 @@ FX.registerPreset('caption_pad', {
 //   58–60 粒子带短拖尾沿弧线汇聚成「几乎处处」；60.0 起约 1.5 秒过渡成白金色，留极淡彩边；光带扫过时整行字闪一次彩虹渐变
 //   镜头不推近：塔只做 ±8° 的极缓横向环绕；整体亮度压在 60% 以内（见 lumCap）
 // ============================================================
-const DUST_T = 56.0, LIGHT_T = [300, 309, 316, 321, 325, 328, 331, 333].map(v => v / 6); // 50.0 … 55.5，落在 1/6 秒网格上（24fps 与 30fps 都精确对齐）
+const DUST_T = u(21), LIGHT_T = [12, 9, 7, 5, 3.5, 2.5, 1.5, 0.5].map(b => DUST_T - b * U / 6);  // 化尘开始 = 21U；8 层点亮落在拍点上（19U 起，间隔 3→1 拍加快，最后一个在化尘前 0.5 拍）
 {
   const base = FX.presets.slab_tower_right, pt = FX.presets.particle_text, big = bigFont(1.5, 40);
   const specColor = (i, n, v) => FX.hsv(FX.lerp(0.02, 0.76, i / (n - 1)), 0.78, v);
   FX.registerPreset('slab_tower_finale', Object.assign({}, base, {
     描述: '塔逐层点亮 → 逐层化尘上飘 → 弧线汇聚成大字 → 白金色',
     params: Object.assign({}, base.params, {
-      orbitBase: 0.2, orbitAmp: 0.14, orbitPeriod: 14, orbitFrom: 48.3, // 斜侧视角中心约 11°，±8° 缓慢环绕
+      orbitBase: 0.2, orbitAmp: 0.14, orbitPeriod: 24, orbitFrom: u(15) + 3.3, // 斜侧视角中心约 11°，±8° 缓慢环绕
       litDur: 0.45, lift: 14, dustPer: 1700, dissolveGap: 0.2, dissolveDur: 0.45,
-      gatherAt: 58.0, gatherDelay: 0.4, gatherDur: [1.2, 1.6], bow: 70,
-      goldAt: 60.0, goldDur: 1.5, gold: [1.0, 0.9, 0.66], fringe: 0.1,
-      fontSize: 300, textY: 470, subY: 660, subAt: 60.2, sweepT0: 60.4, sweepDur: 1.8, sweepHalf: 230,
-      lumFrom: 46, lumTo: 50, exposure: 0.82, bloom: 0.9,
+      gatherAt: DUST_T + 2.0, gatherDelay: 0.4, gatherDur: [1.2, 1.6], bow: 70,
+      goldAt: DUST_T + 4.0, goldDur: 1.5, gold: [1.0, 0.9, 0.66], fringe: 0.1,
+      fontSize: 300, textY: 470, subY: 660, subAt: DUST_T + 4.2, sweepT0: DUST_T + 4.4, sweepDur: 1.8, sweepHalf: 230,
+      lumFrom: u(18), lumTo: u(19), exposure: 0.82, bloom: 0.9,
     }),
     sounds: Object.assign({}, base.sounds, { arrive: pt.sounds.arrive }),
     init(ctx, p) {
@@ -183,7 +218,7 @@ const DUST_T = 56.0, LIGHT_T = [300, 309, 316, 321, 325, 328, 331, 333].map(v =>
     proj(T, p) { const th = this.theta(T, p), cs = Math.cos(th), sn = Math.sin(th); return (x, y, z) => [p.cx + x * cs - z * sn, p.slabY - y + (x * sn + z * cs) * p.tilt]; },
     layerColor(i, p, v) { return specColor(i, p.layers, v); },
     step(s, ctx, p) {
-      base.step.call(this, s, ctx, p); const T = ctx.t, d = s.dust, L = p.layers;
+      base.step.call(this, s, noFlash(ctx), p); const T = ctx.t, d = s.dust, L = p.layers;
       // 整体亮度上限：50 秒起压低曝光与泛光（只在本段生效，前面不动）
       const lk = FX.prog(T, p.lumFrom, p.lumTo), P = FX.Runner.post; if (lk > 0) { P.exposure = FX.lerp(1.3, p.exposure, lk); P.bloomStrength = FX.lerp(1.3, p.bloom, lk); }
       // 事件标记：每层点亮一个 layer_light（阶段 B 让音阶逐级上行）；56.0 化尘开始 dust_start；每层化尘一个 layer_dust
@@ -254,44 +289,69 @@ const DUST_T = 56.0, LIGHT_T = [300, 309, 316, 321, 325, 328, 331, 333].map(v =>
   }));
 }
 
+// ============================================================
+// 闪白切：只在 3 个镜头切点出现。灰白、峰值 ≈ 70% 亮度、总长 0.125 秒（24fps 3 帧）；该帧关泛光；新场景主元素在闪白褪到一半时才显影
+// ============================================================
+FX.registerPreset('flash_cut', {
+  描述: '镜头切换用的灰白闪：峰值帧起、0.15 秒内衰减到 0，期间泛光关闭',
+  params: { times: [], peak: 0.82, dur: 0.125 },
+  init() { return { fired: new Set() }; },
+  step(s, ctx, p) {
+    const T = ctx.t, P = FX.Runner.post; let v = 0;
+    p.times.forEach((t0, i) => { const tau = T - t0; if (tau >= -1e-6 && tau < p.dur) { const n = Math.floor(tau * ctx.fps + 1e-6); /* 切点后第一帧即峰值，按帧序号衰减，0.15 秒内归零 */ v = Math.max(v, p.peak * Math.pow(Math.max(0, 1 - n / (ctx.fps * p.dur)), 1.5));  if (!s.fired.has(i)) { s.fired.add(i); ctx.emit({ type: 'flash_cut', marker: true, x: 0.5 }); } } });
+    if (v > 0) { P.flash = v; P.bloomStrength = 0; s.on = true; } else { if (s.on) { P.flash = 0; s.on = false; } if (P.bloomStrength === 0) P.bloomStrength = FX.Runner.defaultPost().bloomStrength; }  // 窗口一结束立刻清零，不留指数尾巴
+  },
+  draw() {},
+});
+
+// 镜头切点标记（音频第 3 步用）：硬切 / 闪白 / 渐黑
+FX.registerPreset('cut_markers', {
+  描述: '只发事件标记，不画任何东西',
+  params: { cuts: [] },
+  init() { return { fired: new Set() }; }, draw() {},
+  step(s, ctx, p) { p.cuts.forEach((c, i) => { if (!s.fired.has(i) && ctx.t >= c.t) { s.fired.add(i); ctx.emit({ type: 'cut_marker', kind: c.kind, marker: true, x: 0.5 }); } }); },
+});
+
+const FLASH_T = [u(2), u(8), u(13)], QUIET = [[u(4), u(8)], [u(17), u(19)]], G = 0.06;  // G：闪白峰值后 0.06 秒新场景才显影
+const ramp = (t, a, b, r) => Math.min(FX.prog(t, a, a + r), 1 - FX.prog(t, b - r, b));
 FX.scene({
-  name: 'gentlest_word', duration: 64, palette: 'deep_night', seed: 2026,
+  name: 'gentlest_word', duration: TOTAL, palette: 'deep_night', seed: 2026,
   post: { bloomStrength: 1.3, bloomThreshold: 0.4, exposure: 1.3, vignette: 0.45, noise: 0.03 },
-  // 时间标记（阶段 B 按此对齐 BGM）：56.0 秒 = 化尘开始；50.0–56.0 秒逐层点亮，每层一个 layer_light 事件（时刻见 light.times）
-  markers: { dust_start: DUST_T, light: { t0: 50.0, t1: 56.0, times: LIGHT_T } },
+  // 时间标记（音频第 3 步按此对齐 BGM）
+  markers: { U, beat: U / 6, total_U: 24, dust_start: DUST_T, light: { t0: LIGHT_T[0], t1: DUST_T, times: LIGHT_T },
+    cuts_U: [2, 8, 10, 13, 15, 21], flash: FLASH_T, dip_to_black: u(15), quiet: QUIET, camera_moves: { zoom: [u(2), u(4)], pull_back: [DUST_T, TOTAL] } },
+  // 镜头：安静段回到静止机位（去掉漂移）；化尘后缓慢拉远
+  camera(t, cam) {
+    const wq = Math.max(...QUIET.map(([a, b]) => ramp(t, a, b, 0.4))), out = {};
+    if (wq > 0) { out.x = FX.lerp(cam.x, 960, wq); out.y = FX.lerp(cam.y, 540, wq); out.zoom = FX.lerp(cam.zoom, 1, wq); out.rot = FX.lerp(cam.rot, 0, wq); }
+    const pb = FX.prog(t, DUST_T, TOTAL, 'inOutSine'); if (pb > 0) out.zoom = (out.zoom == null ? cam.zoom : out.zoom) * (1 - 0.06 * pb);
+    return out;
+  },
   shots: [
-    { preset: 'chat_bubble_storm',      t: 0,    end: 4.3,  fadeOut: 0.5 },
-    { preset: 'dirichlet_chat',         t: 3.9,  end: 19.3, fadeIn: 0.6, fadeOut: 0.3, params: { zooms: [{ t0: 0.5, t1: 3.4, factor: 9 }, { t0: 3.9, t1: 6.6, factor: 9 }], numberStart: 7.0, numberRate: 5.5, grayRatio: 0.14, density: 260 } },
-    { preset: 'riemann_bars_collapse',  t: 19,   end: 24.2, fadeIn: 0.3, fadeOut: 0.3 },
-    { preset: 'banknote_chat_sort',     t: 24,   end: 32.2, fadeIn: 0.3, fadeOut: 0.3 },
-    { preset: 'bubbles_to_light',       t: 32,   end: 42.2, fadeIn: 0.3, fadeOut: 0.4, params: { counterFreeze: 8.0 } },
-    { preset: 'voice_bubble_right',     t: 42,   end: 47.5, fadeIn: 0.2 },
-    { preset: 'slab_tower_finale',      t: 47.5, end: 64 },
-    { preset: 'tower_with_gray_line',   t: 42,   end: 58.6, fadeIn: 0.2, fadeOut: 0.6 },
-    { preset: 'caption_pad',            t: 0,    end: 4.4, fadeOut: 0.4, params: { from: 0.42, alpha: 0.9 } }, // 钩子段字幕垫底更深
-    { preset: 'caption_pad',            t: 0,    end: 64 },
+    { preset: 'storm_charge',           t: 0,            end: u(2),  },
+    { preset: 'dirichlet_chat',         t: u(2) + G,     end: u(8),  fadeIn: 0.15, params: { zooms: [{ t0: 0.3, t1: 3.2, factor: 9 }, { t0: 3.4, t1: 6.2, factor: 9 }], numberStart: 6.4, numberRate: 5.5, grayRatio: 0.14, density: 260 } },
+    { preset: 'riemann_amber',          t: u(8) + G,     end: u(10), fadeIn: 0.15 },
+    { preset: 'banknote_chat_sort',     t: u(10),        end: u(13), fadeIn: 0.1 },
+    { preset: 'bubbles_calm',           t: u(13) + G,    end: u(15), fadeIn: 0.15, fadeOut: 0.25 },   // 15U：0.25 秒渐黑 + 0.25 秒渐显
+    { preset: 'voice_bubble_right',     t: u(15),        end: u(15) + 1.9, fadeIn: 0.25 },
+    { preset: 'slab_tower_finale',      t: u(15) + 1.9,  end: TOTAL },
+    { preset: 'tower_with_gray_line',   t: u(15),        end: DUST_T + 2.6, fadeIn: 0.25, fadeOut: 0.6 },
+    { preset: 'flash_cut',              t: 0,            end: TOTAL, params: { times: FLASH_T } },
+    { preset: 'cut_markers',            t: 0,            end: TOTAL, params: { cuts: [{ t: u(2), kind: 'flash' }, { t: u(8), kind: 'flash' }, { t: u(10), kind: 'hard' }, { t: u(13), kind: 'flash' }, { t: u(15), kind: 'dip_to_black' }, { t: DUST_T, kind: 'dust' }] } },
+    { preset: 'caption_pad',            t: 0,            end: u(2), fadeOut: 0.3, params: { from: 0.42, alpha: 0.9 } },   // 钩子段字幕垫底更深
+    { preset: 'caption_pad',            t: 0,            end: TOTAL },
   ],
-  // 每幕至少一次光带扫过（爆发前近乎单色，光带都很淡）
+  // 每幕至少一次光带扫过（很淡；爆发前近乎单色）
   fx: [
-    { t: 1.2,  type: 'sweep', dur: 1.4, angle: -0.6, intensity: 0.18, width: 0.10 },
-    { t: 7.0,  type: 'sweep', dur: 1.8, angle: -0.5, intensity: 0.11, width: 0.09 },
-    { t: 15.0, type: 'sweep', dur: 1.8, angle: -0.5, intensity: 0.10, width: 0.09 },
-    { t: 20.0, type: 'sweep', dur: 1.4, angle: -0.7, intensity: 0.11, width: 0.08 },
-    { t: 26.5, type: 'sweep', dur: 1.6, angle: -0.6, intensity: 0.10, width: 0.08 },
-    { t: 38.0, type: 'sweep', dur: 1.8, angle: -0.5, intensity: 0.11, width: 0.09, color: '#E8B931' },
-    { t: 45.0, type: 'sweep', dur: 1.6, angle: -0.6, intensity: 0.10, width: 0.08, color: '#2F5BEA' },
-    { t: 51.0, type: 'sweep', dur: 1.6, angle: -0.6, intensity: 0.09, width: 0.08, color: '#2F5BEA' },
-    { t: 60.4, type: 'sweep', dur: 1.8, angle: -0.55, intensity: 0.16, width: 0.10 },
+    { t: 1.0,  type: 'sweep', dur: 1.4, angle: -0.6, intensity: 0.16, width: 0.10 },
+    { t: 10.5, type: 'sweep', dur: 1.8, angle: -0.5, intensity: 0.11, width: 0.09 },
+    { t: 19.5, type: 'sweep', dur: 1.8, angle: -0.5, intensity: 0.10, width: 0.09 },
+    { t: 27.0, type: 'sweep', dur: 1.4, angle: -0.7, intensity: 0.11, width: 0.08 },
+    { t: 36.0, type: 'sweep', dur: 1.6, angle: -0.6, intensity: 0.10, width: 0.08 },
+    { t: 43.5, type: 'sweep', dur: 1.8, angle: -0.5, intensity: 0.11, width: 0.09, color: '#E8B931' },
+    { t: 52.0, type: 'sweep', dur: 1.6, angle: -0.6, intensity: 0.10, width: 0.08, color: '#2F5BEA' },
+    { t: 57.5, type: 'sweep', dur: 1.6, angle: -0.6, intensity: 0.09, width: 0.08, color: '#2F5BEA' },
+    { t: DUST_T + 4.4, type: 'sweep', dur: 1.8, angle: -0.55, intensity: 0.16, width: 0.10 },
   ],
-  // 配乐（numpy 合成的和弦垫 / 低音），音效由各预设的事件产生
-  music: { layers: [
-    { type: 'pad',   t: 4.0,  end: 19.0, notes: [45, 52, 57],         gain: 0.045, attack: 2.5, release: 1.0 },
-    { type: 'drone', t: 19.0, end: 23.8, notes: [33, 34],             gain: 0.06,  attack: 0.8, release: 0.6 },
-    { type: 'pad',   t: 24.0, end: 32.0, notes: [45, 52, 57, 59],     gain: 0.05,  attack: 1.2, release: 0.8 },
-    { type: 'pad',   t: 32.0, end: 39.9, notes: [45, 52, 57, 64],     gain: 0.06,  attack: 1.5, release: 0.12 },
-    { type: 'pad',   t: 40.6, end: 42.0, notes: [57, 64],             gain: 0.04,  attack: 0.4, release: 0.6 },
-    { type: 'drone', t: 42.0, end: 56.0, notes: [33, 40],             gain: 0.12,  attack: 2.5, release: 1.5 },
-    { type: 'pad',   t: 44.0, end: 56.0, notes: [45, 52, 57],         gain: 0.05,  attack: 2.0, release: 1.5 },
-    { type: 'pad',   t: 56.0, end: 60.5, notes: [45, 52, 57, 64, 69], gain: 0.14,  attack: 0.8, release: 3.5 },
-  ] },
+  music: { layers: [] },  // 配乐由 BGM 提供（音频第 3 步）；这里不再合成
 });
